@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Генератор карт</title>
+<title>Card Generator</title>
 
 <!-- Tailwind 4 (браузерная сборка) -->
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
@@ -15,25 +15,74 @@
 
 <style>
   :root{
-    --paper:#eef1f4;
-    --ink:#141821;
-    --felt:#0f4d43;
-    --felt-edge:#0a3b33;
+    /* нейтральная палитра интерфейса (светлая тема) */
+    --bg:#eef1f4;
+    --text:#141821;
+    --muted:#5b6573;
+    --faint:#8a93a3;
+    --border:#e2e8f0;
+    --border-strong:#cbd5e1;
+    --surface:#ffffff;
+    --surface-hover:#f3f5f8;
+    --btn-bg:#0f172a;
+    --btn-text:#ffffff;
+    --btn-bg-hover:#334155;
+    --danger:#e11d48;
+    --danger-hover:#fff1f2;
+
+    /* плейсхолдеры */
+    --ph-border:rgba(20,30,50,.22);
+    --ph-text:rgba(20,30,50,.5);
+
+    /* карты — белые в обеих темах (как настоящие игральные) */
+    --card-bg:#ffffff;
+    --card-border:rgba(20,30,50,.12);
     --red:#c8102e;
     --black:#161b22;
+
+    /* акценты и сукно */
+    --felt:#0f4d43;
+    --felt-edge:#0a3b33;
     --sel:#2563eb;
     --kept:#b8860b;
     --card-serif: Georgia, "Times New Roman", "DejaVu Serif", serif;
+
+    color-scheme: light;
   }
 
-  html,body{background:var(--paper);}
-  body{font-family:"DM Sans",system-ui,sans-serif;color:var(--ink);}
+  html.dark{
+    --bg:#0e1217;
+    --text:#e6e9ee;
+    --muted:#9aa4b2;
+    --faint:#6b7686;
+    --border:#232c39;
+    --border-strong:#36414f;
+    --surface:#161c24;
+    --surface-hover:#1d2530;
+    --btn-bg:#e2e8f0;
+    --btn-text:#0f172a;
+    --btn-bg-hover:#cbd5e1;
+    --danger:#fb7185;
+    --danger-hover:rgba(244,63,94,.14);
+
+    --ph-border:rgba(230,233,238,.18);
+    --ph-text:rgba(230,233,238,.42);
+
+    --felt:#0e463d;
+    --felt-edge:#082e28;
+
+    color-scheme: dark;
+  }
+
+  html,body{background:var(--bg);}
+  body{font-family:"DM Sans",system-ui,sans-serif;color:var(--text);
+       transition:background-color .25s ease,color .25s ease;}
   .display{font-family:"Space Grotesk",system-ui,sans-serif;}
   .eyebrow{font-family:"Space Grotesk",system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;}
 
   /* ---------- Карта ---------- */
   .pc{
-    position:relative;background:#fff;border:1px solid rgba(20,30,50,.12);
+    position:relative;background:var(--card-bg);border:1px solid var(--card-border);
     border-radius:12px;box-shadow:0 2px 6px rgba(2,8,20,.12);
     display:flex;align-items:center;justify-content:center;
     font-family:var(--card-serif);user-select:none;
@@ -87,22 +136,26 @@
       var(--felt);
     border:1px solid var(--felt-edge);
     box-shadow:inset 0 1px 0 rgba(255,255,255,.06), inset 0 -16px 40px rgba(0,0,0,.28);
+    transition:background-color .25s ease,border-color .25s ease;
   }
 
-  .ph{border:1.5px dashed rgba(20,30,50,.22);border-radius:14px;color:rgba(20,30,50,.45);}
+  .ph{border:1.5px dashed var(--ph-border);border-radius:14px;color:var(--ph-text);}
   .ph.on-felt{border-color:rgba(255,255,255,.28);color:rgba(255,255,255,.6);}
 
-  /* прилёт карт */
-  @keyframes dealIn{from{opacity:0;transform:translateY(14px) rotate(-2deg);}to{opacity:1;transform:none;}}
-  .deal{animation:dealIn .34s cubic-bezier(.2,.7,.3,1) backwards;animation-delay:calc(var(--i,0)*55ms);}
-
   .btn{font-family:"Space Grotesk",sans-serif;font-weight:600;border-radius:12px;
-       transition:transform .08s ease, background .15s ease, opacity .15s ease;}
+       transition:transform .08s ease, background-color .2s ease, color .2s ease, border-color .2s ease, opacity .15s ease;}
   .btn:active:not(:disabled){transform:translateY(1px);}
   .btn:disabled{opacity:.4;cursor:not-allowed;}
 
+  /* кнопки-переключатели сверху */
+  .ctl{font-family:"Space Grotesk",sans-serif;
+       transition:background-color .2s ease,border-color .2s ease,color .2s ease;}
+  .ctl:active{transform:translateY(1px);}
+
+  input{transition:background-color .2s ease,border-color .2s ease,color .2s ease;}
+
   @media (prefers-reduced-motion: reduce){
-    .deal{animation:none;}.pc{transition:none;}
+    .pc{transition:none;} body,.felt,.btn,.ctl,input{transition:none;}
   }
 </style>
 </head>
@@ -111,68 +164,80 @@
   <main class="mx-auto max-w-2xl px-4 py-8 sm:py-12">
 
     <!-- Шапка -->
-    <header class="mb-8 flex items-end justify-between gap-4">
-      <div>
-        <h1 class="display text-3xl sm:text-4xl font-bold tracking-tight">Генератор карт</h1>
-        <p class="mt-1 text-sm text-slate-500">Тяните карты без повторов, выбирайте нужные и собирайте руку.</p>
+    <header class="mb-8">
+      <!-- переключатели темы и языка -->
+      <div class="flex justify-end items-center gap-2 mb-5">
+        <button id="langBtn" class="ctl inline-flex items-center justify-center h-9 min-w-[44px] px-2.5
+                rounded-lg border border-[var(--border-strong)] text-[var(--text)] text-sm font-semibold
+                hover:bg-[var(--surface-hover)]">RU</button>
+        <button id="themeBtn" class="ctl inline-flex items-center justify-center h-9 w-9
+                rounded-lg border border-[var(--border-strong)] text-[var(--text)]
+                hover:bg-[var(--surface-hover)]" aria-label=""></button>
       </div>
-      <div class="shrink-0 text-right">
-        <div id="deckCount" class="display text-2xl font-bold tabular-nums">52</div>
-        <div class="eyebrow text-[10px] text-slate-400">в колоде</div>
+
+      <div class="flex items-end justify-between gap-4">
+        <div>
+          <h1 data-i18n="title" class="display text-3xl sm:text-4xl font-bold tracking-tight">Генератор карт</h1>
+          <p data-i18n="subtitle" class="mt-1 text-sm text-[var(--muted)]">Тяните карты без повторов, выбирайте нужные и собирайте руку.</p>
+        </div>
+        <div class="shrink-0 text-right">
+          <div id="deckCount" class="display text-2xl font-bold tabular-nums">52</div>
+          <div data-i18n="deckLabel" class="eyebrow text-[10px] text-[var(--faint)]">в колоде</div>
+        </div>
       </div>
     </header>
 
     <!-- 1. Взятые карты -->
     <section class="mb-7">
-      <div class="eyebrow text-[11px] text-slate-400 mb-2">Ваши карты</div>
+      <div data-i18n="takenEyebrow" class="eyebrow text-[11px] text-[var(--faint)] mb-2">Ваши карты</div>
       <div id="takenZone" class="flex flex-wrap gap-2.5 items-start"></div>
     </section>
 
-    <hr class="border-slate-200 mb-7">
+    <hr class="border-[var(--border)] mb-7">
 
     <!-- 2. Новый расклад (зона раздачи) -->
     <section class="mb-7">
       <div class="flex items-center justify-between mb-2">
-        <div class="eyebrow text-[11px] text-slate-400">Новый расклад</div>
-        <div id="pickHint" class="text-[11px] text-slate-400"></div>
+        <div data-i18n="dealEyebrow" class="eyebrow text-[11px] text-[var(--faint)]">Новый расклад</div>
+        <div id="pickHint" class="text-[11px] text-[var(--faint)]"></div>
       </div>
       <div class="felt rounded-2xl p-4">
         <div id="dealZone" class="flex flex-wrap gap-2.5 items-start"></div>
       </div>
       <div class="mt-3 flex items-center gap-3">
-        <button id="confirmBtn" class="btn bg-blue-600 text-white px-4 py-2.5 text-sm hover:bg-blue-500" disabled>
+        <button id="confirmBtn" data-i18n="confirm" class="btn bg-blue-600 text-white px-4 py-2.5 text-sm hover:bg-blue-500" disabled>
           Подтвердить выбор
         </button>
-        <span id="status" class="text-xs text-slate-500"></span>
+        <span id="status" class="text-xs text-[var(--muted)]"></span>
       </div>
     </section>
 
-    <hr class="border-slate-200 mb-7">
+    <hr class="border-[var(--border)] mb-7">
 
-    <!-- Управление колодой -->
+    <!-- 3. Управление колодой -->
     <section class="mb-7">
-      <div class="eyebrow text-[11px] text-slate-400 mb-2">Колода</div>
+      <div data-i18n="deckEyebrow" class="eyebrow text-[11px] text-[var(--faint)] mb-2">Колода</div>
       <div class="flex flex-wrap items-center gap-3">
-        <label class="sr-only" for="countInput">Количество карт</label>
+        <label class="sr-only" for="countInput" data-i18n="countAria">Количество карт</label>
         <input id="countInput" type="number" min="1" value="5"
-               class="w-24 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm tabular-nums
-                      focus:outline-none focus:ring-2 focus:ring-blue-500" />
-        <button id="generateBtn" class="btn bg-slate-900 text-white px-5 py-2.5 text-sm hover:bg-slate-700">
+               class="w-24 rounded-xl border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text)]
+                      px-3 py-2.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <button id="generateBtn" class="btn bg-[var(--btn-bg)] text-[var(--btn-text)] px-5 py-2.5 text-sm hover:bg-[var(--btn-bg-hover)]">
           Сгенерировать
         </button>
-        <button id="resetBtn" class="btn ml-auto text-rose-600 px-3 py-2.5 text-sm hover:bg-rose-50">
+        <button id="resetBtn" data-i18n="reset" class="btn ml-auto text-[var(--danger)] px-3 py-2.5 text-sm hover:bg-[var(--danger-hover)]">
           Сбросить всё
         </button>
       </div>
     </section>
 
-    <hr class="border-slate-200 mb-7">
+    <hr class="border-[var(--border)] mb-7">
 
-    <!-- История -->
+    <!-- 4. История -->
     <section>
-      <div class="eyebrow text-[11px] text-slate-400 mb-2">История раздач</div>
+      <div data-i18n="historyEyebrow" class="eyebrow text-[11px] text-[var(--faint)] mb-2">История раздач</div>
       <div id="historyZone" class="space-y-3"></div>
-      <button id="undoBtn" class="btn mt-3 border border-slate-300 bg-white text-slate-700 px-4 py-2 text-sm hover:bg-slate-50" disabled>
+      <button id="undoBtn" data-i18n="undo" class="btn mt-3 border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text)] px-4 py-2 text-sm hover:bg-[var(--surface-hover)]" disabled>
         Отменить последнее действие
       </button>
     </section>
@@ -197,11 +262,7 @@
 
   // ---------- Состояние ----------
   const state = {
-    used: new Set(),   // id всех карт, что уже «выпадали»
-    taken: [],         // взятые карты (новые — сверху)
-    current: [],       // [{card, selected}] — текущий расклад
-    history: [],       // [{gen, cards:[{card, kept}]}] — новые сверху
-    genCounter: 0,
+    used: new Set(), taken: [], current: [], history: [], genCounter: 0,
   };
 
   // ---------- DOM ----------
@@ -211,7 +272,85 @@
     pickHint: $("pickHint"), confirmBtn: $("confirmBtn"), status: $("status"),
     historyZone: $("historyZone"), undoBtn: $("undoBtn"),
     countInput: $("countInput"), generateBtn: $("generateBtn"), resetBtn: $("resetBtn"),
+    themeBtn: $("themeBtn"), langBtn: $("langBtn"),
   };
+
+  // ---------- Локализация ----------
+  const STR = {
+    ru: {
+      title:"Генератор карт",
+      subtitle:"Тяните карты без повторов, выбирайте нужные и собирайте руку.",
+      deckLabel:"в колоде",
+      takenEyebrow:"Ваши карты",
+      dealEyebrow:"Новый расклад",
+      confirm:"Подтвердить выбор",
+      deckEyebrow:"Колода",
+      reset:"Сбросить всё",
+      historyEyebrow:"История раздач",
+      undo:"Отменить последнее действие",
+      countAria:"Количество карт",
+      generate:"Сгенерировать",
+      deckEmpty:"Колода пуста",
+      phTaken:"Пока пусто — подтвердите карты, и они появятся здесь",
+      phDeal:"Нажмите «Сгенерировать», чтобы раздать карты",
+      phHistory:"Здесь будет каждая раздача отдельным блоком.",
+      pickHintIdle:"нажмите на карты, чтобы выбрать",
+      pickSelected:(n)=>`выбрано: ${n}`,
+      genLabel:(n)=>`Генерация: ${n}`,
+      keptOf:(k,m)=>`взято ${k} из ${m}`,
+      stInvalid:"Введите число от 1 и больше.",
+      stEmpty:"В колоде не осталось карт.",
+      stCapped:(n,d)=>`Запрошено ${n}, в колоде было ${d} — выдано ${d}.`,
+      langTo:"Switch to English",
+      themeToDark:"Тёмная тема",
+      themeToLight:"Светлая тема",
+    },
+    en: {
+      title:"Card Generator",
+      subtitle:"Draw cards without repeats, pick the ones you want, and build your hand.",
+      deckLabel:"in deck",
+      takenEyebrow:"Your cards",
+      dealEyebrow:"New deal",
+      confirm:"Confirm selection",
+      deckEyebrow:"Deck",
+      reset:"Reset all",
+      historyEyebrow:"Deal history",
+      undo:"Undo last action",
+      countAria:"Number of cards",
+      generate:"Generate",
+      deckEmpty:"Deck is empty",
+      phTaken:"Empty for now — confirm cards and they’ll appear here",
+      phDeal:"Press “Generate” to deal some cards",
+      phHistory:"Each deal will show up here as its own block.",
+      pickHintIdle:"tap cards to select",
+      pickSelected:(n)=>`selected: ${n}`,
+      genLabel:(n)=>`Generation: ${n}`,
+      keptOf:(k,m)=>`kept ${k} of ${m}`,
+      stInvalid:"Enter a number of 1 or more.",
+      stEmpty:"No cards left in the deck.",
+      stCapped:(n,d)=>`Requested ${n}, only ${d} left — dealt ${d}.`,
+      langTo:"Переключить на русский",
+      themeToDark:"Dark theme",
+      themeToLight:"Light theme",
+    },
+  };
+
+  const SUN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  const MOON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+
+  const THEME_KEY = "cardGenerator.theme";
+  const LANG_KEY  = "cardGenerator.lang";
+  const mql = window.matchMedia("(prefers-color-scheme: dark)");
+
+  function safeGet(k){ try { return localStorage.getItem(k); } catch (_) { return null; } }
+  function safeSet(k,v){ try { localStorage.setItem(k,v); } catch (_) {} }
+
+  // язык: сохранённый → по языку браузера → английский
+  let lang = safeGet(LANG_KEY);
+  if (lang !== "ru" && lang !== "en")
+    lang = (navigator.language || "").toLowerCase().startsWith("ru") ? "ru" : "en";
+
+  const T = () => STR[lang];
 
   // ---------- Хелперы ----------
   const available = () => DECK.filter(c => !state.used.has(c.id));
@@ -240,7 +379,7 @@
 
   function placeholder(text, onFelt=false){
     return `<div class="ph ${onFelt?"on-felt":""} w-full min-h-[122px] flex items-center
-                 justify-center text-sm">${text}</div>`;
+                 justify-center text-sm text-center px-3">${text}</div>`;
   }
 
   function setStatus(msg){ el.status.textContent = msg || ""; }
@@ -248,7 +387,7 @@
   // ---------- Рендер ----------
   function renderTaken(){
     if (state.taken.length === 0){
-      el.takenZone.innerHTML = placeholder("Пока пусто — подтвердите карты, и они появятся здесь");
+      el.takenZone.innerHTML = placeholder(T().phTaken);
       return;
     }
     el.takenZone.innerHTML = state.taken.map(c => cardHTML(c)).join("");
@@ -256,7 +395,7 @@
 
   function renderDeal(){
     if (state.current.length === 0){
-      el.dealZone.innerHTML = placeholder("Нажмите «Сгенерировать», чтобы раздать карты", true);
+      el.dealZone.innerHTML = placeholder(T().phDeal, true);
       el.pickHint.textContent = "";
     } else {
       el.dealZone.innerHTML = state.current.map((item, i) =>
@@ -267,7 +406,7 @@
         })
       ).join("");
       const n = state.current.filter(c => c.selected).length;
-      el.pickHint.textContent = n ? `выбрано: ${n}` : "нажмите на карты, чтобы выбрать";
+      el.pickHint.textContent = n ? T().pickSelected(n) : T().pickHintIdle;
     }
     el.confirmBtn.disabled = !state.current.some(c => c.selected);
   }
@@ -275,7 +414,7 @@
   function renderHistory(){
     if (state.history.length === 0){
       el.historyZone.innerHTML =
-        `<div class="text-sm text-slate-400 py-2">Здесь будет каждая раздача отдельным блоком.</div>`;
+        `<div class="text-sm text-[var(--faint)] py-2">${T().phHistory}</div>`;
       el.undoBtn.disabled = true;
       return;
     }
@@ -285,10 +424,10 @@
         cardHTML(c.card, { size:"sm", cls: c.kept ? "kept" : "notkept" })
       ).join("");
       return `
-        <div class="rounded-xl border border-slate-200 bg-white/70 p-3">
+        <div class="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
           <div class="flex items-center justify-between mb-2">
-            <span class="eyebrow text-[10px] text-slate-500">Генерация: ${entry.gen}</span>
-            <span class="text-[11px] text-slate-400">взято ${kept} из ${entry.cards.length}</span>
+            <span class="eyebrow text-[10px] text-[var(--muted)]">${T().genLabel(entry.gen)}</span>
+            <span class="text-[11px] text-[var(--faint)]">${T().keptOf(kept, entry.cards.length)}</span>
           </div>
           <div class="flex flex-wrap gap-2 items-start">${cards}</div>
         </div>`;
@@ -301,7 +440,7 @@
     el.deckCount.textContent = left;
     el.countInput.max = Math.max(1, left);
     el.generateBtn.disabled = left === 0;
-    el.generateBtn.textContent = left === 0 ? "Колода пуста" : "Сгенерировать";
+    el.generateBtn.textContent = left === 0 ? T().deckEmpty : T().generate;
   }
 
   function renderAll(){ renderTaken(); renderDeal(); renderHistory(); renderDeck(); }
@@ -339,27 +478,70 @@
   // рендерим и сразу сохраняем
   function commit(){ renderAll(); persist(); }
 
+  // ---------- Тема ----------
+  function effectiveTheme(){
+    const s = safeGet(THEME_KEY);
+    return (s === "light" || s === "dark") ? s : (mql.matches ? "dark" : "light");
+  }
+  function applyTheme(){
+    const t = effectiveTheme();
+    document.documentElement.classList.toggle("dark", t === "dark");
+    el.themeBtn.innerHTML = (t === "dark") ? SUN : MOON;
+    const label = (t === "dark") ? T().themeToLight : T().themeToDark;
+    el.themeBtn.setAttribute("aria-label", label);
+    el.themeBtn.setAttribute("title", label);
+  }
+  function toggleTheme(){
+    safeSet(THEME_KEY, effectiveTheme() === "dark" ? "light" : "dark");
+    applyTheme();
+  }
+  // если пользователь не выбирал тему вручную — следуем за системой
+  mql.addEventListener("change", () => { if (!safeGet(THEME_KEY)) applyTheme(); });
+
+  // ---------- Язык ----------
+  function applyLang(){
+    document.documentElement.lang = lang;
+    document.querySelectorAll("[data-i18n]").forEach(node => {
+      const k = node.getAttribute("data-i18n");
+      if (T()[k] != null) node.textContent = T()[k];
+    });
+    document.querySelectorAll("[data-i18n-aria]").forEach(node => {
+      const k = node.getAttribute("data-i18n-aria");
+      if (T()[k] != null) node.setAttribute("aria-label", T()[k]);
+    });
+    el.langBtn.textContent = (lang === "ru") ? "EN" : "RU";
+    el.langBtn.setAttribute("aria-label", T().langTo);
+    el.langBtn.setAttribute("title", T().langTo);
+    applyTheme();            // подпись кнопки темы зависит от языка
+    setStatus("");
+    renderAll();             // плейсхолдеры, история, подсказки, кнопка генерации
+  }
+  function toggleLang(){
+    lang = (lang === "ru") ? "en" : "ru";
+    safeSet(LANG_KEY, lang);
+    applyLang();
+  }
+
   // ---------- Действия ----------
   function returnCurrentToDeck(){
-    // неподтверждённый расклад возвращаем в колоду
     for (const item of state.current) state.used.delete(item.card.id);
     state.current = [];
   }
 
   function generate(){
     let n = parseInt(el.countInput.value, 10);
-    if (!Number.isFinite(n) || n < 1){ setStatus("Введите число от 1 и больше."); return; }
+    if (!Number.isFinite(n) || n < 1){ setStatus(T().stInvalid); return; }
 
     returnCurrentToDeck();
 
     const pool = shuffle(available());
-    if (pool.length === 0){ commit(); setStatus("В колоде не осталось карт."); return; }
+    if (pool.length === 0){ commit(); setStatus(T().stEmpty); return; }
 
     const drawn = pool.slice(0, Math.min(n, pool.length));
     drawn.forEach(c => state.used.add(c.id));
     state.current = drawn.map(card => ({ card, selected:false }));
 
-    setStatus(drawn.length < n ? `Запрошено ${n}, в колоде было ${drawn.length} — выдано ${drawn.length}.` : "");
+    setStatus(drawn.length < n ? T().stCapped(n, drawn.length) : "");
     commit();
   }
 
@@ -387,11 +569,11 @@
 
   function undo(){
     if (state.history.length === 0) return;
-    const entry = state.history.shift();      // последняя по времени раздача
+    const entry = state.history.shift();
     const keptIds = new Set(entry.cards.filter(c => c.kept).map(c => c.card.id));
 
-    state.taken = state.taken.filter(c => !keptIds.has(c.id));   // убираем из руки
-    entry.cards.forEach(c => state.used.delete(c.card.id));      // карты возвращаются в колоду
+    state.taken = state.taken.filter(c => !keptIds.has(c.id));
+    entry.cards.forEach(c => state.used.delete(c.card.id));
     state.genCounter = Math.max(0, state.genCounter - 1);
     setStatus("");
     commit();
@@ -423,9 +605,12 @@
   el.confirmBtn.addEventListener("click", confirm);
   el.undoBtn.addEventListener("click", undo);
   el.resetBtn.addEventListener("click", reset);
+  el.themeBtn.addEventListener("click", toggleTheme);
+  el.langBtn.addEventListener("click", toggleLang);
 
-  restore();    // подтягиваем сохранённое состояние, если оно есть
-  renderAll();
+  // ---------- Старт ----------
+  restore();     // подтягиваем сохранённое состояние партии
+  applyLang();   // применяет язык, тему и делает первый рендер
 })();
 </script>
 </body>
