@@ -305,6 +305,39 @@
 
   function renderAll(){ renderTaken(); renderDeal(); renderHistory(); renderDeck(); }
 
+  // ---------- Сохранение состояния (localStorage) ----------
+  const STORE_KEY = "cardGenerator.state.v1";
+
+  function persist(){
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        used: [...state.used],
+        taken: state.taken,
+        current: state.current,
+        history: state.history,
+        genCounter: state.genCounter,
+        count: el.countInput.value,
+      }));
+    } catch (_) { /* хранилище недоступно — работаем без сохранения */ }
+  }
+
+  function restore(){
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      state.used       = new Set(Array.isArray(d.used) ? d.used : []);
+      state.taken      = Array.isArray(d.taken) ? d.taken : [];
+      state.current    = Array.isArray(d.current) ? d.current : [];
+      state.history    = Array.isArray(d.history) ? d.history : [];
+      state.genCounter = Number(d.genCounter) || 0;
+      if (d.count) el.countInput.value = d.count;
+    } catch (_) { /* битые данные — стартуем с чистого состояния */ }
+  }
+
+  // рендерим и сразу сохраняем
+  function commit(){ renderAll(); persist(); }
+
   // ---------- Действия ----------
   function returnCurrentToDeck(){
     // неподтверждённый расклад возвращаем в колоду
@@ -319,19 +352,19 @@
     returnCurrentToDeck();
 
     const pool = shuffle(available());
-    if (pool.length === 0){ renderAll(); setStatus("В колоде не осталось карт."); return; }
+    if (pool.length === 0){ commit(); setStatus("В колоде не осталось карт."); return; }
 
     const drawn = pool.slice(0, Math.min(n, pool.length));
     drawn.forEach(c => state.used.add(c.id));
     state.current = drawn.map(card => ({ card, selected:false }));
 
     setStatus(drawn.length < n ? `Запрошено ${n}, в колоде было ${drawn.length} — выдано ${drawn.length}.` : "");
-    renderAll();
+    commit();
   }
 
   function toggleSelect(id){
     const item = state.current.find(c => c.card.id === id);
-    if (item){ item.selected = !item.selected; renderDeal(); }
+    if (item){ item.selected = !item.selected; renderDeal(); persist(); }
   }
 
   function confirm(){
@@ -348,7 +381,7 @@
     state.taken = [...state.taken, ...selected];
     state.current = [];            // карты раздачи остаются «выпавшими»
     setStatus("");
-    renderAll();
+    commit();
   }
 
   function undo(){
@@ -360,7 +393,7 @@
     entry.cards.forEach(c => state.used.delete(c.card.id));      // карты возвращаются в колоду
     state.genCounter = Math.max(0, state.genCounter - 1);
     setStatus("");
-    renderAll();
+    commit();
   }
 
   function reset(){
@@ -370,7 +403,7 @@
     state.history = [];
     state.genCounter = 0;
     setStatus("");
-    renderAll();
+    commit();
   }
 
   // ---------- События ----------
@@ -390,6 +423,7 @@
   el.undoBtn.addEventListener("click", undo);
   el.resetBtn.addEventListener("click", reset);
 
+  restore();    // подтягиваем сохранённое состояние, если оно есть
   renderAll();
 })();
 </script>
