@@ -1,0 +1,397 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Генератор карт</title>
+
+<!-- Tailwind 4 (браузерная сборка) -->
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+
+<style>
+  :root{
+    --paper:#eef1f4;
+    --ink:#141821;
+    --felt:#0f4d43;
+    --felt-edge:#0a3b33;
+    --red:#c8102e;
+    --black:#161b22;
+    --sel:#2563eb;
+    --kept:#b8860b;
+    --card-serif: Georgia, "Times New Roman", "DejaVu Serif", serif;
+  }
+
+  html,body{background:var(--paper);}
+  body{font-family:"DM Sans",system-ui,sans-serif;color:var(--ink);}
+  .display{font-family:"Space Grotesk",system-ui,sans-serif;}
+  .eyebrow{font-family:"Space Grotesk",system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;}
+
+  /* ---------- Карта ---------- */
+  .pc{
+    position:relative;background:#fff;border:1px solid rgba(20,30,50,.12);
+    border-radius:12px;box-shadow:0 2px 6px rgba(2,8,20,.12);
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--card-serif);user-select:none;
+    transition:transform .15s ease, box-shadow .15s ease, outline-color .12s ease;
+  }
+  .pc .corner{position:absolute;line-height:.85;text-align:center;font-weight:700;}
+  .pc .corner.tl{top:5px;left:7px;}
+  .pc .corner.br{bottom:5px;right:7px;transform:rotate(180deg);}
+  .pc .corner .s{font-weight:400;display:block;}
+  .pc .center{font-weight:400;}
+  .red{color:var(--red);}
+  .blk{color:var(--black);}
+
+  /* размер: крупные карты (взятые + расклад) */
+  .pc.lg{width:86px;height:122px;}
+  .pc.lg .corner{font-size:19px;}
+  .pc.lg .corner.tl{top:6px;left:8px;}
+  .pc.lg .corner.br{bottom:6px;right:8px;}
+  .pc.lg .corner .s{font-size:17px;}
+  .pc.lg .center{font-size:46px;}
+
+  /* размер: мелкие карты (история) */
+  .pc.sm{width:52px;height:72px;border-radius:8px;box-shadow:0 1px 3px rgba(2,8,20,.14);}
+  .pc.sm .corner{font-size:12px;}
+  .pc.sm .corner.tl{top:4px;left:5px;}
+  .pc.sm .corner.br{bottom:4px;right:5px;}
+  .pc.sm .corner .s{font-size:11px;}
+  .pc.sm .center{font-size:27px;}
+
+  /* выбираемые карты в раскладе */
+  .pc.pick{cursor:pointer;}
+  .pc.pick:hover{transform:translateY(-3px);box-shadow:0 8px 18px rgba(2,8,20,.18);}
+  .pc.pick:focus-visible{outline:3px solid var(--sel);outline-offset:2px;}
+  .pc.sel{outline:3px solid var(--sel);outline-offset:2px;transform:translateY(-8px);
+          box-shadow:0 12px 22px rgba(37,99,235,.28);}
+  .pc .check{position:absolute;top:-9px;right:-9px;width:22px;height:22px;border-radius:999px;
+             background:var(--sel);color:#fff;display:none;align-items:center;justify-content:center;
+             font-family:"DM Sans",sans-serif;font-size:13px;font-weight:700;box-shadow:0 1px 4px rgba(0,0,0,.3);}
+  .pc.sel .check{display:flex;}
+
+  /* отметка «взято» в истории */
+  .pc.kept{outline:2px solid var(--kept);outline-offset:1px;}
+  .pc.kept .dot{position:absolute;top:-6px;right:-6px;width:14px;height:14px;border-radius:999px;
+                background:var(--kept);box-shadow:0 1px 3px rgba(0,0,0,.3);}
+  .pc.notkept{opacity:.42;filter:saturate(.6);}
+
+  /* зона раздачи (зелёное сукно) — фирменный элемент */
+  .felt{
+    background:
+      radial-gradient(120% 120% at 50% -20%, rgba(255,255,255,.06), transparent 60%),
+      var(--felt);
+    border:1px solid var(--felt-edge);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06), inset 0 -16px 40px rgba(0,0,0,.28);
+  }
+
+  .ph{border:1.5px dashed rgba(20,30,50,.22);border-radius:14px;color:rgba(20,30,50,.45);}
+  .ph.on-felt{border-color:rgba(255,255,255,.28);color:rgba(255,255,255,.6);}
+
+  /* прилёт карт */
+  @keyframes dealIn{from{opacity:0;transform:translateY(14px) rotate(-2deg);}to{opacity:1;transform:none;}}
+  .deal{animation:dealIn .34s cubic-bezier(.2,.7,.3,1) backwards;animation-delay:calc(var(--i,0)*55ms);}
+
+  .btn{font-family:"Space Grotesk",sans-serif;font-weight:600;border-radius:12px;
+       transition:transform .08s ease, background .15s ease, opacity .15s ease;}
+  .btn:active:not(:disabled){transform:translateY(1px);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  @media (prefers-reduced-motion: reduce){
+    .deal{animation:none;}.pc{transition:none;}
+  }
+</style>
+</head>
+
+<body class="min-h-screen">
+  <main class="mx-auto max-w-2xl px-4 py-8 sm:py-12">
+
+    <!-- Шапка -->
+    <header class="mb-8 flex items-end justify-between gap-4">
+      <div>
+        <h1 class="display text-3xl sm:text-4xl font-bold tracking-tight">Генератор карт</h1>
+        <p class="mt-1 text-sm text-slate-500">Тяните карты без повторов, выбирайте нужные и собирайте руку.</p>
+      </div>
+      <div class="shrink-0 text-right">
+        <div id="deckCount" class="display text-2xl font-bold tabular-nums">52</div>
+        <div class="eyebrow text-[10px] text-slate-400">в колоде</div>
+      </div>
+    </header>
+
+    <!-- 1. Взятые карты -->
+    <section class="mb-7">
+      <div class="eyebrow text-[11px] text-slate-400 mb-2">Ваши карты</div>
+      <div id="takenZone" class="flex flex-wrap gap-2.5 items-start"></div>
+    </section>
+
+    <hr class="border-slate-200 mb-7">
+
+    <!-- 2. Новый расклад (зона раздачи) -->
+    <section class="mb-7">
+      <div class="flex items-center justify-between mb-2">
+        <div class="eyebrow text-[11px] text-slate-400">Новый расклад</div>
+        <div id="pickHint" class="text-[11px] text-slate-400"></div>
+      </div>
+      <div class="felt rounded-2xl p-4">
+        <div id="dealZone" class="flex flex-wrap gap-2.5 items-start"></div>
+      </div>
+      <div class="mt-3 flex items-center gap-3">
+        <button id="confirmBtn" class="btn bg-blue-600 text-white px-4 py-2.5 text-sm hover:bg-blue-500" disabled>
+          Подтвердить выбор
+        </button>
+        <span id="status" class="text-xs text-slate-500"></span>
+      </div>
+    </section>
+
+    <hr class="border-slate-200 mb-7">
+
+    <!-- Управление колодой -->
+    <section class="mb-7">
+      <div class="eyebrow text-[11px] text-slate-400 mb-2">Колода</div>
+      <div class="flex flex-wrap items-center gap-3">
+        <label class="sr-only" for="countInput">Количество карт</label>
+        <input id="countInput" type="number" min="1" value="5"
+               class="w-24 rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm tabular-nums
+                      focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <button id="generateBtn" class="btn bg-slate-900 text-white px-5 py-2.5 text-sm hover:bg-slate-700">
+          Сгенерировать
+        </button>
+        <button id="resetBtn" class="btn ml-auto text-rose-600 px-3 py-2.5 text-sm hover:bg-rose-50">
+          Сбросить всё
+        </button>
+      </div>
+    </section>
+
+    <hr class="border-slate-200 mb-7">
+
+    <!-- История -->
+    <section>
+      <div class="eyebrow text-[11px] text-slate-400 mb-2">История раздач</div>
+      <div id="historyZone" class="space-y-3"></div>
+      <button id="undoBtn" class="btn mt-3 border border-slate-300 bg-white text-slate-700 px-4 py-2 text-sm hover:bg-slate-50" disabled>
+        Отменить последнее действие
+      </button>
+    </section>
+
+  </main>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- Колода ----------
+  const SUITS = [
+    { s:"♠", red:false }, { s:"♥", red:true },
+    { s:"♦", red:true  }, { s:"♣", red:false },
+  ];
+  const RANKS = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+
+  const DECK = [];
+  for (const suit of SUITS)
+    for (const rank of RANKS)
+      DECK.push({ id: rank + suit.s, rank, suit: suit.s, red: suit.red });
+
+  // ---------- Состояние ----------
+  const state = {
+    used: new Set(),   // id всех карт, что уже «выпадали»
+    taken: [],         // взятые карты (новые — сверху)
+    current: [],       // [{card, selected}] — текущий расклад
+    history: [],       // [{gen, cards:[{card, kept}]}] — новые сверху
+    genCounter: 0,
+  };
+
+  // ---------- DOM ----------
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    deckCount: $("deckCount"), takenZone: $("takenZone"), dealZone: $("dealZone"),
+    pickHint: $("pickHint"), confirmBtn: $("confirmBtn"), status: $("status"),
+    historyZone: $("historyZone"), undoBtn: $("undoBtn"),
+    countInput: $("countInput"), generateBtn: $("generateBtn"), resetBtn: $("resetBtn"),
+  };
+
+  // ---------- Хелперы ----------
+  const available = () => DECK.filter(c => !state.used.has(c.id));
+
+  function shuffle(arr){
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function cardHTML(card, { size="lg", cls="", idx=null, extra="" } = {}){
+    const color = card.red ? "red" : "blk";
+    const style = idx !== null ? ` style="--i:${idx}"` : "";
+    return `
+      <div class="pc ${size} ${cls}"${style} ${extra}>
+        <span class="corner tl ${color}">${card.rank}<span class="s">${card.suit}</span></span>
+        <span class="center ${color}">${card.suit}</span>
+        <span class="corner br ${color}">${card.rank}<span class="s">${card.suit}</span></span>
+        <span class="check">✓</span>
+        <span class="dot"></span>
+      </div>`;
+  }
+
+  function placeholder(text, onFelt=false){
+    return `<div class="ph ${onFelt?"on-felt":""} w-full min-h-[122px] flex items-center
+                 justify-center text-sm">${text}</div>`;
+  }
+
+  function setStatus(msg){ el.status.textContent = msg || ""; }
+
+  // ---------- Рендер ----------
+  function renderTaken(){
+    if (state.taken.length === 0){
+      el.takenZone.innerHTML = placeholder("Пока пусто — подтвердите карты, и они появятся здесь");
+      return;
+    }
+    el.takenZone.innerHTML = state.taken.map(c => cardHTML(c)).join("");
+  }
+
+  function renderDeal(){
+    if (state.current.length === 0){
+      el.dealZone.innerHTML = placeholder("Нажмите «Сгенерировать», чтобы раздать карты", true);
+      el.pickHint.textContent = "";
+    } else {
+      el.dealZone.innerHTML = state.current.map((item, i) =>
+        cardHTML(item.card, {
+          cls: "pick" + (item.selected ? " sel" : ""),
+          idx: i,
+          extra: `role="button" tabindex="0" aria-pressed="${item.selected}" data-id="${item.card.id}"`,
+        })
+      ).join("");
+      const n = state.current.filter(c => c.selected).length;
+      el.pickHint.textContent = n ? `выбрано: ${n}` : "нажмите на карты, чтобы выбрать";
+    }
+    el.confirmBtn.disabled = !state.current.some(c => c.selected);
+  }
+
+  function renderHistory(){
+    if (state.history.length === 0){
+      el.historyZone.innerHTML =
+        `<div class="text-sm text-slate-400 py-2">Здесь будет каждая раздача отдельным блоком.</div>`;
+      el.undoBtn.disabled = true;
+      return;
+    }
+    el.historyZone.innerHTML = state.history.map(entry => {
+      const kept = entry.cards.filter(c => c.kept).length;
+      const cards = entry.cards.map(c =>
+        cardHTML(c.card, { size:"sm", cls: c.kept ? "kept" : "notkept" })
+      ).join("");
+      return `
+        <div class="rounded-xl border border-slate-200 bg-white/70 p-3">
+          <div class="flex items-center justify-between mb-2">
+            <span class="eyebrow text-[10px] text-slate-500">Генерация: ${entry.gen}</span>
+            <span class="text-[11px] text-slate-400">взято ${kept} из ${entry.cards.length}</span>
+          </div>
+          <div class="flex flex-wrap gap-2 items-start">${cards}</div>
+        </div>`;
+    }).join("");
+    el.undoBtn.disabled = false;
+  }
+
+  function renderDeck(){
+    const left = available().length;
+    el.deckCount.textContent = left;
+    el.countInput.max = Math.max(1, left);
+    el.generateBtn.disabled = left === 0;
+    el.generateBtn.textContent = left === 0 ? "Колода пуста" : "Сгенерировать";
+  }
+
+  function renderAll(){ renderTaken(); renderDeal(); renderHistory(); renderDeck(); }
+
+  // ---------- Действия ----------
+  function returnCurrentToDeck(){
+    // неподтверждённый расклад возвращаем в колоду
+    for (const item of state.current) state.used.delete(item.card.id);
+    state.current = [];
+  }
+
+  function generate(){
+    let n = parseInt(el.countInput.value, 10);
+    if (!Number.isFinite(n) || n < 1){ setStatus("Введите число от 1 и больше."); return; }
+
+    returnCurrentToDeck();
+
+    const pool = shuffle(available());
+    if (pool.length === 0){ renderAll(); setStatus("В колоде не осталось карт."); return; }
+
+    const drawn = pool.slice(0, Math.min(n, pool.length));
+    drawn.forEach(c => state.used.add(c.id));
+    state.current = drawn.map(card => ({ card, selected:false }));
+
+    setStatus(drawn.length < n ? `Запрошено ${n}, в колоде было ${drawn.length} — выдано ${drawn.length}.` : "");
+    renderAll();
+  }
+
+  function toggleSelect(id){
+    const item = state.current.find(c => c.card.id === id);
+    if (item){ item.selected = !item.selected; renderDeal(); }
+  }
+
+  function confirm(){
+    const selected = state.current.filter(c => c.selected).map(c => c.card);
+    if (selected.length === 0) return;
+
+    state.genCounter += 1;
+    state.history.unshift({
+      gen: state.genCounter,
+      cards: state.current.map(c => ({ card: c.card, kept: c.selected })),
+    });
+
+    // выбранные карты — в конец руки, после уже взятых, порядок сохраняем
+    state.taken = [...state.taken, ...selected];
+    state.current = [];            // карты раздачи остаются «выпавшими»
+    setStatus("");
+    renderAll();
+  }
+
+  function undo(){
+    if (state.history.length === 0) return;
+    const entry = state.history.shift();      // последняя по времени раздача
+    const keptIds = new Set(entry.cards.filter(c => c.kept).map(c => c.card.id));
+
+    state.taken = state.taken.filter(c => !keptIds.has(c.id));   // убираем из руки
+    entry.cards.forEach(c => state.used.delete(c.card.id));      // карты возвращаются в колоду
+    state.genCounter = Math.max(0, state.genCounter - 1);
+    setStatus("");
+    renderAll();
+  }
+
+  function reset(){
+    state.used.clear();
+    state.taken = [];
+    state.current = [];
+    state.history = [];
+    state.genCounter = 0;
+    setStatus("");
+    renderAll();
+  }
+
+  // ---------- События ----------
+  el.dealZone.addEventListener("click", (e) => {
+    const card = e.target.closest(".pc.pick");
+    if (card) toggleSelect(card.dataset.id);
+  });
+  el.dealZone.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" && e.key !== " ") return;
+    const card = e.target.closest(".pc.pick");
+    if (card){ e.preventDefault(); toggleSelect(card.dataset.id); }
+  });
+
+  el.generateBtn.addEventListener("click", generate);
+  el.countInput.addEventListener("keydown", (e) => { if (e.key === "Enter") generate(); });
+  el.confirmBtn.addEventListener("click", confirm);
+  el.undoBtn.addEventListener("click", undo);
+  el.resetBtn.addEventListener("click", reset);
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
