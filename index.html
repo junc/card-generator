@@ -569,11 +569,20 @@
 
   function undo(){
     if (state.history.length === 0) return;
-    const entry = state.history.shift();
+
+    // если в зоне выбора остались неподтверждённые карты — вернём их в колоду
+    returnCurrentToDeck();
+
+    const entry = state.history.shift();               // последняя подтверждённая раздача
     const keptIds = new Set(entry.cards.filter(c => c.kept).map(c => c.card.id));
 
+    // убираем ранее взятые карты из руки
     state.taken = state.taken.filter(c => !keptIds.has(c.id));
-    entry.cards.forEach(c => state.used.delete(c.card.id));
+
+    // возвращаем ту же раздачу обратно в зону выбора (карты остаются «выпавшими»);
+    // прежний выбор помечен — можно снять его и выбрать другие, затем подтвердить заново
+    state.current = entry.cards.map(c => ({ card: c.card, selected: c.kept }));
+
     state.genCounter = Math.max(0, state.genCounter - 1);
     setStatus("");
     commit();
