@@ -39,6 +39,8 @@
     --card-border:rgba(20,30,50,.12);
     --red:#c8102e;
     --black:#161b22;
+    --diamond:#1a5fd0;   /* бубны — синие */
+    --club:#128a41;      /* трефы — зелёные */
 
     /* акценты и сукно */
     --felt:#0f4d43;
@@ -95,6 +97,8 @@
   .pc .center{font-weight:400;}
   .red{color:var(--red);}
   .blk{color:var(--black);}
+  .dia{color:var(--diamond);}
+  .clb{color:var(--club);}
 
   /* размер: крупные карты (взятые + расклад) */
   .pc.lg{width:86px;height:122px;}
@@ -365,7 +369,7 @@
   }
 
   function cardHTML(card, { size="lg", cls="", idx=null, extra="" } = {}){
-    const color = card.red ? "red" : "blk";
+    const color = ({ "♠":"blk", "♥":"red", "♦":"dia", "♣":"clb" })[card.suit] || (card.red ? "red" : "blk");
     const style = idx !== null ? ` style="--i:${idx}"` : "";
     return `
       <div class="pc ${size} ${cls}"${style} ${extra}>
