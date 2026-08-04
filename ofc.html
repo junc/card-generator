@@ -1,0 +1,754 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Card Generator</title>
+
+<!-- Tailwind 4 (браузерная сборка) -->
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" type="image/x-icon" href="/card-generator/favicon.png">
+
+<style>
+  :root{
+    --bg:#eef1f4;
+    --text:#141821;
+    --muted:#5b6573;
+    --faint:#8a93a3;
+    --border:#e2e8f0;
+    --border-strong:#cbd5e1;
+    --surface:#ffffff;
+    --surface-hover:#f3f5f8;
+    --btn-bg:#0f172a;
+    --btn-text:#ffffff;
+    --btn-bg-hover:#334155;
+    --danger:#e11d48;
+    --danger-hover:#fff1f2;
+
+    --ph-border:rgba(20,30,50,.22);
+    --ph-text:rgba(20,30,50,.5);
+
+    --card-bg:#ffffff;
+    --card-border:rgba(20,30,50,.12);
+    --red:#c8102e;
+    --black:#161b22;
+    --diamond:#1a5fd0;   /* бубны — синие */
+    --club:#128a41;      /* трефы — зелёные */
+
+    --felt:#0f4d43;
+    --felt-edge:#0a3b33;
+    --sel:#2563eb;
+    --kept:#b8860b;
+    --card-serif: Georgia, "Times New Roman", "DejaVu Serif", serif;
+
+    color-scheme: light;
+  }
+
+  html.dark{
+    --bg:#0e1217;
+    --text:#e6e9ee;
+    --muted:#9aa4b2;
+    --faint:#6b7686;
+    --border:#232c39;
+    --border-strong:#36414f;
+    --surface:#161c24;
+    --surface-hover:#1d2530;
+    --btn-bg:#e2e8f0;
+    --btn-text:#0f172a;
+    --btn-bg-hover:#cbd5e1;
+    --danger:#fb7185;
+    --danger-hover:rgba(244,63,94,.14);
+
+    --ph-border:rgba(230,233,238,.18);
+    --ph-text:rgba(230,233,238,.42);
+
+    --felt:#0e463d;
+    --felt-edge:#082e28;
+
+    color-scheme: dark;
+  }
+
+  html,body{background:var(--bg);}
+  body{font-family:"DM Sans",system-ui,sans-serif;color:var(--text);
+       transition:background-color .25s ease,color .25s ease;}
+  .display{font-family:"Space Grotesk",system-ui,sans-serif;}
+  .eyebrow{font-family:"Space Grotesk",system-ui,sans-serif;letter-spacing:.14em;text-transform:uppercase;}
+
+  /* ---------- Карта ---------- */
+  .pc{
+    position:relative;background:var(--card-bg);border:1px solid var(--card-border);
+    border-radius:12px;box-shadow:0 2px 6px rgba(2,8,20,.12);
+    display:flex;align-items:center;justify-content:center;
+    font-family:var(--card-serif);user-select:none;flex:0 0 auto;
+    transition:transform .12s ease, box-shadow .12s ease, opacity .12s ease;
+  }
+  .pc .corner{position:absolute;line-height:.85;text-align:center;font-weight:700;}
+  .pc .corner.tl{top:5px;left:7px;}
+  .pc .corner.br{bottom:5px;right:7px;transform:rotate(180deg);}
+  .pc .corner .s{font-weight:400;display:block;}
+  .pc .center{font-weight:400;}
+  .red{color:var(--red);}
+  .blk{color:var(--black);}
+  .dia{color:var(--diamond);}
+  .clb{color:var(--club);}
+
+  /* крупные карты (раздача) */
+  .pc.lg{width:86px;height:122px;}
+  .pc.lg .corner{font-size:19px;}
+  .pc.lg .corner.tl{top:6px;left:8px;}
+  .pc.lg .corner.br{bottom:6px;right:8px;}
+  .pc.lg .corner .s{font-size:17px;}
+  .pc.lg .center{font-size:46px;}
+
+  /* карты на линиях */
+  .pc.md{width:64px;height:90px;}
+  .pc.md .corner{font-size:14px;}
+  .pc.md .corner.tl{top:4px;left:6px;}
+  .pc.md .corner.br{bottom:4px;right:6px;}
+  .pc.md .corner .s{font-size:12px;}
+  .pc.md .center{font-size:34px;}
+
+  /* мелкие карты (история) */
+  .pc.sm{width:52px;height:72px;border-radius:8px;box-shadow:0 1px 3px rgba(2,8,20,.14);}
+  .pc.sm .corner{font-size:12px;}
+  .pc.sm .corner.tl{top:4px;left:5px;}
+  .pc.sm .corner.br{bottom:4px;right:5px;}
+  .pc.sm .corner .s{font-size:11px;}
+  .pc.sm .center{font-size:27px;}
+
+  /* перетаскиваемые (карты текущей генерации) */
+  .pc.drag{cursor:grab;}
+  .pc.drag:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(2,8,20,.18);}
+  .pc.drag:active{cursor:grabbing;}
+  .pc.dragging{opacity:.4;}
+  .pc.pending{outline:2px dashed var(--sel);outline-offset:1px;}  /* ещё не подтверждена */
+  .pc.locked{cursor:default;}                                     /* зафиксированная на линии */
+
+  /* отметки в истории */
+  .pc.kept{outline:2px solid var(--kept);outline-offset:1px;}
+  .pc.burned{opacity:.4;filter:saturate(.6);}
+
+  /* пустой слот */
+  .slot{width:64px;height:90px;border:1.5px dashed var(--ph-border);border-radius:10px;flex:0 0 auto;}
+
+  /* линия-поле */
+  .row-panel{border:1px solid var(--border);background:var(--surface);border-radius:14px;padding:10px 12px;
+             transition:background-color .2s ease,border-color .2s ease,box-shadow .2s ease;}
+  .row-slots{display:flex;flex-wrap:wrap;gap:8px;}
+  .row-panel.over{border-color:var(--sel);box-shadow:inset 0 0 0 2px rgba(37,99,235,.28);}
+
+  /* зона раздачи */
+  .felt{
+    background:
+      radial-gradient(120% 120% at 50% -20%, rgba(255,255,255,.06), transparent 60%),
+      var(--felt);
+    border:1px solid var(--felt-edge);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.06), inset 0 -16px 40px rgba(0,0,0,.28);
+    transition:background-color .25s ease,border-color .25s ease,outline-color .12s ease;
+  }
+  .felt.over{outline:2px solid var(--sel);outline-offset:2px;}
+
+  .ph{border:1.5px dashed var(--ph-border);border-radius:14px;color:var(--ph-text);}
+  .ph.on-felt{border-color:rgba(255,255,255,.28);color:rgba(255,255,255,.6);}
+
+  .btn{font-family:"Space Grotesk",sans-serif;font-weight:600;border-radius:12px;
+       transition:transform .08s ease, background-color .2s ease, color .2s ease, border-color .2s ease, opacity .15s ease;}
+  .btn:active:not(:disabled){transform:translateY(1px);}
+  .btn:disabled{opacity:.4;cursor:not-allowed;}
+
+  .ctl{font-family:"Space Grotesk",sans-serif;
+       transition:background-color .2s ease,border-color .2s ease,color .2s ease;}
+  .ctl:active{transform:translateY(1px);}
+
+  input{transition:background-color .2s ease,border-color .2s ease,color .2s ease;}
+
+  @media (prefers-reduced-motion: reduce){
+    .pc,body,.felt,.btn,.ctl,input,.row-panel{transition:none;}
+  }
+</style>
+</head>
+
+<body class="min-h-screen">
+  <main class="mx-auto max-w-2xl px-4 py-8 sm:py-12">
+
+    <!-- Шапка -->
+    <header class="mb-8">
+      <div class="flex justify-end items-center gap-2 mb-5">
+        <button id="langBtn" class="ctl inline-flex items-center justify-center h-9 min-w-[44px] px-2.5
+                rounded-lg border border-[var(--border-strong)] text-[var(--text)] text-sm font-semibold
+                hover:bg-[var(--surface-hover)]">RU</button>
+        <button id="themeBtn" class="ctl inline-flex items-center justify-center h-9 w-9
+                rounded-lg border border-[var(--border-strong)] text-[var(--text)]
+                hover:bg-[var(--surface-hover)]" aria-label=""></button>
+      </div>
+
+      <div class="flex items-end justify-between gap-4">
+        <div>
+          <h1 data-i18n="title" class="display text-3xl sm:text-4xl font-bold tracking-tight">Генератор карт</h1>
+          <p data-i18n="subtitle" class="mt-1 text-sm text-[var(--muted)]">Генерируйте карты и раскладывайте их по трём линиям.</p>
+        </div>
+        <div class="shrink-0 text-right">
+          <div id="deckCount" class="display text-2xl font-bold tabular-nums">52</div>
+          <div data-i18n="deckLabel" class="eyebrow text-[10px] text-[var(--faint)]">в колоде</div>
+        </div>
+      </div>
+    </header>
+
+    <!-- 1. Раскладка (3 линии) -->
+    <section class="mb-7">
+      <div data-i18n="boardEyebrow" class="eyebrow text-[11px] text-[var(--faint)] mb-2">Раскладка</div>
+      <div class="space-y-3">
+
+        <div class="row-panel" data-drop="top">
+          <div class="flex items-center justify-between mb-2">
+            <span data-i18n="rowTop" class="eyebrow text-[10px] text-[var(--muted)]">Верх</span>
+            <span id="cntTop" class="text-[11px] text-[var(--faint)] tabular-nums">0/3</span>
+          </div>
+          <div id="rowTop" class="row-slots"></div>
+        </div>
+
+        <div class="row-panel" data-drop="mid">
+          <div class="flex items-center justify-between mb-2">
+            <span data-i18n="rowMid" class="eyebrow text-[10px] text-[var(--muted)]">Середина</span>
+            <span id="cntMid" class="text-[11px] text-[var(--faint)] tabular-nums">0/5</span>
+          </div>
+          <div id="rowMid" class="row-slots"></div>
+        </div>
+
+        <div class="row-panel" data-drop="bottom">
+          <div class="flex items-center justify-between mb-2">
+            <span data-i18n="rowBottom" class="eyebrow text-[10px] text-[var(--muted)]">Низ</span>
+            <span id="cntBottom" class="text-[11px] text-[var(--faint)] tabular-nums">0/5</span>
+          </div>
+          <div id="rowBottom" class="row-slots"></div>
+        </div>
+
+      </div>
+    </section>
+
+    <hr class="border-[var(--border)] mb-7">
+
+    <!-- 2. Новый расклад (зона раздачи) -->
+    <section class="mb-7">
+      <div class="flex items-center justify-between mb-2">
+        <div data-i18n="dealEyebrow" class="eyebrow text-[11px] text-[var(--faint)]">Новый расклад</div>
+        <div id="pickHint" class="text-[11px] text-[var(--faint)]"></div>
+      </div>
+      <div class="felt rounded-2xl p-4" data-drop="current">
+        <div id="dealZone" class="flex flex-wrap gap-2.5 items-start"></div>
+      </div>
+      <div class="mt-3 flex items-center gap-3 flex-wrap">
+        <button id="confirmBtn" data-i18n="confirm" class="btn bg-blue-600 text-white px-4 py-2.5 text-sm hover:bg-blue-500" disabled>Подтвердить</button>
+        <button id="cancelBtn" data-i18n="cancel" class="btn border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text)] px-4 py-2.5 text-sm hover:bg-[var(--surface-hover)]" disabled>Отменить</button>
+        <span id="status" class="text-xs text-[var(--muted)]"></span>
+      </div>
+    </section>
+
+    <hr class="border-[var(--border)] mb-7">
+
+    <!-- 3. Управление колодой -->
+    <section class="mb-7">
+      <div data-i18n="deckEyebrow" class="eyebrow text-[11px] text-[var(--faint)] mb-2">Колода</div>
+      <div class="flex flex-wrap items-center gap-3">
+        <label class="sr-only" for="countInput" data-i18n="countAria">Количество карт</label>
+        <input id="countInput" type="number" min="1" value="5"
+               class="w-24 rounded-xl border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text)]
+                      px-3 py-2.5 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        <button id="generateBtn" class="btn bg-[var(--btn-bg)] text-[var(--btn-text)] px-5 py-2.5 text-sm hover:bg-[var(--btn-bg-hover)]">
+          Сгенерировать
+        </button>
+        <button id="resetBtn" data-i18n="reset" class="btn ml-auto text-[var(--danger)] px-3 py-2.5 text-sm hover:bg-[var(--danger-hover)]">
+          Сбросить всё
+        </button>
+      </div>
+    </section>
+
+    <hr class="border-[var(--border)] mb-7">
+
+    <!-- 4. История -->
+    <section>
+      <div data-i18n="historyEyebrow" class="eyebrow text-[11px] text-[var(--faint)] mb-2">История раздач</div>
+      <div id="historyZone" class="space-y-3"></div>
+      <button id="undoBtn" data-i18n="undo" class="btn mt-3 border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text)] px-4 py-2 text-sm hover:bg-[var(--surface-hover)]" disabled>
+        Отменить последнее действие
+      </button>
+    </section>
+
+    <footer class="mt-8 text-center text-[11px] text-[var(--faint)]">
+      <span data-i18n="versionLabel">версия</span> <span id="version" class="tabular-nums"></span>
+    </footer>
+
+  </main>
+
+<script>
+(() => {
+  "use strict";
+
+  // ---------- Колода ----------
+  const SUITS = [
+    { s:"♠", red:false }, { s:"♥", red:true },
+    { s:"♦", red:true  }, { s:"♣", red:false },
+  ];
+  const RANKS = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
+  const SUIT_COLOR = { "♠":"blk", "♥":"red", "♦":"dia", "♣":"clb" };
+
+  const DECK = [];
+  for (const suit of SUITS)
+    for (const rank of RANKS)
+      DECK.push({ id: rank + suit.s, rank, suit: suit.s, red: suit.red });
+
+  const ROWS = ["top", "mid", "bottom"];
+  const CAP  = { top:3, mid:5, bottom:5 };
+
+  // ---------- Состояние ----------
+  // current: [{card, row}]  row = null (в раздаче) | 'top'|'mid'|'bottom' (разложена, но не подтверждена)
+  // board:   {row: [card]}  подтверждённые (зафиксированные) карты
+  // history: [{gen, cards:[{card, row}]}]  подтверждённые раздачи (новые сверху)
+  const state = {
+    board: { top:[], mid:[], bottom:[] },
+    current: [],
+    history: [],
+    genCounter: 0,
+  };
+
+  // ---------- DOM ----------
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    deckCount: $("deckCount"), dealZone: $("dealZone"), pickHint: $("pickHint"),
+    status: $("status"), countInput: $("countInput"), generateBtn: $("generateBtn"),
+    confirmBtn: $("confirmBtn"), cancelBtn: $("cancelBtn"),
+    historyZone: $("historyZone"), undoBtn: $("undoBtn"), resetBtn: $("resetBtn"),
+    themeBtn: $("themeBtn"), langBtn: $("langBtn"), version: $("version"),
+  };
+  const ROW_EL = {
+    top:    { slots:$("rowTop"),    cnt:$("cntTop")    },
+    mid:    { slots:$("rowMid"),    cnt:$("cntMid")    },
+    bottom: { slots:$("rowBottom"), cnt:$("cntBottom") },
+  };
+
+  // ---------- Локализация ----------
+  const STR = {
+    ru: {
+      title:"Генератор карт",
+      subtitle:"Генерируйте карты и раскладывайте их по трём линиям.",
+      deckLabel:"в колоде",
+      boardEyebrow:"Раскладка",
+      rowTop:"Верх", rowMid:"Середина", rowBottom:"Низ",
+      dealEyebrow:"Новый расклад",
+      dealHint:"перетащите нужные карты в линии (или кликните)",
+      deckEyebrow:"Колода",
+      generate:"Сгенерировать",
+      deckEmpty:"Колода пуста",
+      confirm:"Подтвердить",
+      cancel:"Отменить",
+      reset:"Сбросить всё",
+      undo:"Отменить последнее действие",
+      historyEyebrow:"История раздач",
+      countAria:"Количество карт",
+      phDeal:"Нажмите «Сгенерировать», чтобы раздать карты",
+      phAllPlaced:"Все карты разложены — подтвердите или отмените",
+      phHistory:"Здесь будет каждая подтверждённая раздача.",
+      genLabel:(n)=>`Генерация: ${n}`,
+      takenOf:(k,m)=>`взято ${k} из ${m}`,
+      stInvalid:"Введите число от 1 и больше.",
+      stEmpty:"В колоде не осталось карт.",
+      stCapped:(n,d)=>`Запрошено ${n}, в колоде было ${d} — выдано ${d}.`,
+      stRowFull:"Эта линия уже заполнена.",
+      stFull:"Все линии заполнены.",
+      versionLabel:"версия",
+      langTo:"Switch to English",
+      themeToDark:"Тёмная тема",
+      themeToLight:"Светлая тема",
+    },
+    en: {
+      title:"Card Generator",
+      subtitle:"Generate cards and arrange them into three lines.",
+      deckLabel:"in deck",
+      boardEyebrow:"Your layout",
+      rowTop:"Top", rowMid:"Middle", rowBottom:"Bottom",
+      dealEyebrow:"New deal",
+      dealHint:"drag the cards you want into the lines (or click)",
+      deckEyebrow:"Deck",
+      generate:"Generate",
+      deckEmpty:"Deck is empty",
+      confirm:"Confirm",
+      cancel:"Cancel",
+      reset:"Reset all",
+      undo:"Undo last action",
+      historyEyebrow:"Deal history",
+      countAria:"Number of cards",
+      phDeal:"Press “Generate” to deal some cards",
+      phAllPlaced:"All cards placed — confirm or cancel",
+      phHistory:"Every confirmed deal will show up here.",
+      genLabel:(n)=>`Generation: ${n}`,
+      takenOf:(k,m)=>`kept ${k} of ${m}`,
+      stInvalid:"Enter a number of 1 or more.",
+      stEmpty:"No cards left in the deck.",
+      stCapped:(n,d)=>`Requested ${n}, only ${d} left — dealt ${d}.`,
+      stRowFull:"That line is already full.",
+      stFull:"All lines are full.",
+      versionLabel:"version",
+      langTo:"Переключить на русский",
+      themeToDark:"Dark theme",
+      themeToLight:"Light theme",
+    },
+  };
+
+  const SUN = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  const MOON = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg>';
+
+  const THEME_KEY = "cardGenerator.theme";
+  const LANG_KEY  = "cardGenerator.lang";
+  const STORE_KEY = "cardGenerator.state.v3";
+  const mql = window.matchMedia("(prefers-color-scheme: dark)");
+
+  function safeGet(k){ try { return localStorage.getItem(k); } catch (_) { return null; } }
+  function safeSet(k,v){ try { localStorage.setItem(k,v); } catch (_) {} }
+
+  let lang = safeGet(LANG_KEY);
+  if (lang !== "ru" && lang !== "en")
+    lang = (navigator.language || "").toLowerCase().startsWith("ru") ? "ru" : "en";
+  const T = () => STR[lang];
+
+  // ---------- Хелперы ----------
+  function usedIds(){
+    const s = new Set();
+    state.current.forEach(c => s.add(c.card.id));
+    for (const r of ROWS) state.board[r].forEach(c => s.add(c.id));
+    for (const e of state.history) e.cards.forEach(c => s.add(c.card.id));
+    return s;
+  }
+  function available(){ const u = usedIds(); return DECK.filter(c => !u.has(c.id)); }
+
+  function rowCount(r){ return state.board[r].length + state.current.filter(c => c.row === r).length; }
+  function rowFree(r){ return CAP[r] - rowCount(r); }
+  const isPending = () => state.current.length > 0;
+
+  function shuffle(arr){
+    const a = arr.slice();
+    for (let i = a.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function cardHTML(card, { size="lg", cls="", extra="" } = {}){
+    const color = SUIT_COLOR[card.suit] || (card.red ? "red" : "blk");
+    return `
+      <div class="pc ${size} ${cls}" ${extra}>
+        <span class="corner tl ${color}">${card.rank}<span class="s">${card.suit}</span></span>
+        <span class="center ${color}">${card.suit}</span>
+        <span class="corner br ${color}">${card.rank}<span class="s">${card.suit}</span></span>
+      </div>`;
+  }
+
+  function placeholder(text, onFelt=false){
+    return `<div class="ph ${onFelt?"on-felt":""} w-full min-h-[122px] flex items-center
+                 justify-center text-sm text-center px-3">${text}</div>`;
+  }
+
+  function setStatus(msg){ el.status.textContent = msg || ""; }
+
+  function fmtVersion(){
+    const d = new Date(), p = (n) => String(n).padStart(2,"0");
+    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+
+  // ---------- Рендер ----------
+  function renderRow(row){
+    const committed = state.board[row].map(c =>
+      cardHTML(c, { size:"md", cls:"locked" }));                    // зафиксированные, не таскаются
+    const pending = state.current.filter(c => c.row === row).map(c =>
+      cardHTML(c.card, { size:"md", cls:"drag pending", extra:`draggable="true" data-id="${c.card.id}"` }));
+    const cards = committed.concat(pending);
+    let html = cards.join("");
+    const total = rowCount(row);
+    for (let i = total; i < CAP[row]; i++) html += '<div class="slot"></div>';
+    ROW_EL[row].slots.innerHTML = html;
+    ROW_EL[row].cnt.textContent = `${total}/${CAP[row]}`;
+  }
+  function renderBoard(){ ROWS.forEach(renderRow); }
+
+  function renderDeal(){
+    const inDeal = state.current.filter(c => c.row === null);
+    if (state.current.length === 0){
+      el.dealZone.innerHTML = placeholder(T().phDeal, true);
+      el.pickHint.textContent = "";
+    } else if (inDeal.length === 0){
+      el.dealZone.innerHTML = placeholder(T().phAllPlaced, true);
+      el.pickHint.textContent = T().dealHint;
+    } else {
+      el.dealZone.innerHTML = inDeal.map(c =>
+        cardHTML(c.card, { size:"lg", cls:"drag", extra:`draggable="true" data-id="${c.card.id}"` })
+      ).join("");
+      el.pickHint.textContent = T().dealHint;
+    }
+  }
+
+  function renderHistory(){
+    if (state.history.length === 0){
+      el.historyZone.innerHTML = `<div class="text-sm text-[var(--faint)] py-2">${T().phHistory}</div>`;
+      return;
+    }
+    el.historyZone.innerHTML = state.history.map(entry => {
+      const taken = entry.cards.filter(c => c.row).length;
+      const cards = entry.cards.map(c =>
+        cardHTML(c.card, { size:"sm", cls: c.row ? "kept" : "burned" })
+      ).join("");
+      return `
+        <div class="rounded-xl border border-[var(--border)] bg-[var(--surface)] p-3">
+          <div class="flex items-center justify-between mb-2">
+            <span class="eyebrow text-[10px] text-[var(--muted)]">${T().genLabel(entry.gen)}</span>
+            <span class="text-[11px] text-[var(--faint)]">${T().takenOf(taken, entry.cards.length)}</span>
+          </div>
+          <div class="flex flex-wrap gap-2 items-start">${cards}</div>
+        </div>`;
+    }).join("");
+  }
+
+  function renderControls(){
+    const pending = isPending();
+    const left = available().length;
+    el.deckCount.textContent = left;
+    el.countInput.max = Math.max(1, left);
+    el.generateBtn.textContent = left === 0 ? T().deckEmpty : T().generate;
+    el.generateBtn.disabled = pending || left === 0;
+    el.confirmBtn.disabled = !pending;
+    el.cancelBtn.disabled = !pending;
+    el.undoBtn.disabled = pending || state.history.length === 0;
+  }
+
+  function renderAll(){ renderBoard(); renderDeal(); renderHistory(); renderControls(); }
+
+  // ---------- Сохранение ----------
+  function persist(){
+    try {
+      localStorage.setItem(STORE_KEY, JSON.stringify({
+        board: state.board,
+        current: state.current,
+        history: state.history,
+        genCounter: state.genCounter,
+        count: el.countInput.value,
+      }));
+    } catch (_) {}
+  }
+  function restore(){
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      if (d.board && typeof d.board === "object")
+        for (const r of ROWS)
+          state.board[r] = (Array.isArray(d.board[r]) ? d.board[r] : []).slice(0, CAP[r]);
+      state.current = Array.isArray(d.current)
+        ? d.current.map(c => ({ card: c.card, row: (c.row == null ? null : c.row) })) : [];
+      state.history = Array.isArray(d.history) ? d.history : [];
+      state.genCounter = Number(d.genCounter) || 0;
+      if (d.count) el.countInput.value = d.count;
+    } catch (_) {}
+  }
+  function commit(){ renderAll(); persist(); }
+
+  // ---------- Перемещение (только карты текущей генерации) ----------
+  function moveCard(id, to){
+    const item = state.current.find(c => c.card.id === id);
+    if (!item || item.row === to) return false;
+    if (to !== null && rowFree(to) <= 0) return false;   // линия заполнена
+    item.row = to;
+    return true;
+  }
+  function placeFirstFree(id){
+    for (const r of ROWS){
+      if (rowFree(r) > 0){ if (moveCard(id, r)){ setStatus(""); commit(); } return; }
+    }
+    setStatus(T().stFull);
+  }
+
+  // ---------- Действия ----------
+  function generate(){
+    if (isPending()) return;                       // сначала подтвердите/отмените текущую раздачу
+    let n = parseInt(el.countInput.value, 10);
+    if (!Number.isFinite(n) || n < 1){ setStatus(T().stInvalid); return; }
+
+    const pool = shuffle(available());
+    if (pool.length === 0){ setStatus(T().stEmpty); return; }
+
+    const drawn = pool.slice(0, Math.min(n, pool.length));
+    state.current = drawn.map(card => ({ card, row: null }));
+    setStatus(drawn.length < n ? T().stCapped(n, drawn.length) : "");
+    commit();
+  }
+
+  function confirmDeal(){
+    if (!isPending()) return;
+    state.genCounter += 1;
+    state.history.unshift({
+      gen: state.genCounter,
+      cards: state.current.map(c => ({ card: c.card, row: c.row })),
+    });
+    // взятые карты фиксируем на линиях, невзятые «сгорают» (остаются только в истории)
+    for (const r of ROWS)
+      for (const c of state.current.filter(c => c.row === r)) state.board[r].push(c.card);
+    state.current = [];
+    setStatus("");
+    commit();
+  }
+
+  function cancelDeal(){
+    if (!isPending()) return;
+    state.current = [];        // карты возвращаются в колоду
+    setStatus("");
+    commit();
+  }
+
+  function undoLast(){
+    if (isPending() || state.history.length === 0) return;
+    const entry = state.history.shift();
+    state.genCounter = Math.max(0, state.genCounter - 1);
+    // снимаем зафиксированные карты этой раздачи с линий
+    for (const c of entry.cards){
+      if (c.row){
+        const arr = state.board[c.row];
+        const i = arr.findIndex(x => x.id === c.card.id);
+        if (i >= 0) arr.splice(i, 1);
+      }
+    }
+    // возвращаем всю раздачу в текущую генерацию (с прежней раскладкой) для переигровки
+    state.current = entry.cards.map(c => ({ card: c.card, row: c.row }));
+    setStatus("");
+    commit();
+  }
+
+  function reset(){
+    state.board = { top:[], mid:[], bottom:[] };
+    state.current = [];
+    state.history = [];
+    state.genCounter = 0;
+    setStatus("");
+    commit();
+  }
+
+  // ---------- Тема ----------
+  function effectiveTheme(){
+    const s = safeGet(THEME_KEY);
+    return (s === "light" || s === "dark") ? s : (mql.matches ? "dark" : "light");
+  }
+  function applyTheme(){
+    const t = effectiveTheme();
+    document.documentElement.classList.toggle("dark", t === "dark");
+    el.themeBtn.innerHTML = (t === "dark") ? SUN : MOON;
+    const label = (t === "dark") ? T().themeToLight : T().themeToDark;
+    el.themeBtn.setAttribute("aria-label", label);
+    el.themeBtn.setAttribute("title", label);
+  }
+  function toggleTheme(){
+    safeSet(THEME_KEY, effectiveTheme() === "dark" ? "light" : "dark");
+    applyTheme();
+  }
+  mql.addEventListener("change", () => { if (!safeGet(THEME_KEY)) applyTheme(); });
+
+  // ---------- Язык ----------
+  function applyLang(){
+    document.documentElement.lang = lang;
+    document.querySelectorAll("[data-i18n]").forEach(node => {
+      const k = node.getAttribute("data-i18n");
+      if (T()[k] != null) node.textContent = T()[k];
+    });
+    el.langBtn.textContent = (lang === "ru") ? "EN" : "RU";
+    el.langBtn.setAttribute("aria-label", T().langTo);
+    el.langBtn.setAttribute("title", T().langTo);
+    applyTheme();
+    setStatus("");
+    renderAll();
+  }
+  function toggleLang(){
+    lang = (lang === "ru") ? "en" : "ru";
+    safeSet(LANG_KEY, lang);
+    applyLang();
+  }
+
+  // ---------- Drag & drop ----------
+  let draggingId = null;
+  let pendingMove = null;
+  
+  document.addEventListener("dragstart", (e) => {
+    const card = e.target.closest && e.target.closest('.pc[draggable="true"]');
+    if (!card) return;
+    draggingId = card.dataset.id;
+    try { e.dataTransfer.setData("text/plain", draggingId); e.dataTransfer.effectAllowed = "move"; } catch (_) {}
+    card.classList.add("dragging");
+  });
+  document.addEventListener("dragend", () => {
+    draggingId = null;
+    document.querySelectorAll(".dragging").forEach(x => x.classList.remove("dragging"));
+    document.querySelectorAll(".over").forEach(x => x.classList.remove("over"));
+    if (pendingMove) {
+      pendingMove();
+      pendingMove = null;
+    }
+  });
+  function wireDrop(zoneEl){
+    const zoneAttr = zoneEl.dataset.drop;              // 'top'|'mid'|'bottom'|'current'
+    const to = (zoneAttr === "current") ? null : zoneAttr;
+    zoneEl.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      try { e.dataTransfer.dropEffect = "move"; } catch (_) {}
+      zoneEl.classList.add("over");
+    });
+    zoneEl.addEventListener("dragleave", (e) => {
+      if (!zoneEl.contains(e.relatedTarget)) zoneEl.classList.remove("over");
+    });
+    zoneEl.addEventListener("drop", (e) => {
+      e.preventDefault();
+      zoneEl.classList.remove("over");
+
+      const id = draggingId || e.dataTransfer?.getData("text/plain");
+      if (!id) return;
+
+      pendingMove = () => {
+        if (moveCard(id, to)) {
+          setStatus("");
+          commit();
+        } else if (to !== null) {
+          setStatus(T().stRowFull);
+        }
+      };
+    });
+  }
+
+  // ---------- События ----------
+  document.querySelectorAll("[data-drop]").forEach(wireDrop);
+
+  el.dealZone.addEventListener("click", (e) => {
+    const card = e.target.closest('.pc[data-id]');
+    if (card) placeFirstFree(card.dataset.id);        // из раздачи — в первую свободную линию
+  });
+  document.querySelectorAll(".row-panel").forEach(panel => {
+    panel.addEventListener("click", (e) => {
+      const card = e.target.closest('.pc[data-id]');   // только незафиксированные карты имеют data-id
+      if (card && moveCard(card.dataset.id, null)){ setStatus(""); commit(); }
+    });
+  });
+
+  el.generateBtn.addEventListener("click", generate);
+  el.countInput.addEventListener("keydown", (e) => { if (e.key === "Enter") generate(); });
+  el.confirmBtn.addEventListener("click", confirmDeal);
+  el.cancelBtn.addEventListener("click", cancelDeal);
+  el.undoBtn.addEventListener("click", undoLast);
+  el.resetBtn.addEventListener("click", reset);
+  el.themeBtn.addEventListener("click", toggleTheme);
+  el.langBtn.addEventListener("click", toggleLang);
+
+  // ---------- Старт ----------
+  restore();
+  el.version.textContent = fmtVersion();
+  applyLang();
+})();
+</script>
+</body>
+</html>
