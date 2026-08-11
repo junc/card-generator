@@ -120,13 +120,12 @@
   .pc.sm .corner .s{font-size:11px;}
   .pc.sm .center{font-size:27px;}
 
-  /* перетаскиваемые (карты текущей генерации) */
+  /* перетаскиваемые карты */
   .pc.drag{cursor:grab;}
   .pc.drag:hover{transform:translateY(-2px);box-shadow:0 8px 18px rgba(2,8,20,.18);}
   .pc.drag:active{cursor:grabbing;}
   .pc.dragging{opacity:.4;}
   .pc.pending{outline:2px dashed var(--sel);outline-offset:1px;}  /* ещё не подтверждена */
-  .pc.locked{cursor:default;}                                     /* зафиксированная на линии */
 
   /* отметки в истории */
   .pc.kept{outline:2px solid var(--kept);outline-offset:1px;}
@@ -140,6 +139,11 @@
              transition:background-color .2s ease,border-color .2s ease,box-shadow .2s ease;}
   .row-slots{display:flex;flex-wrap:wrap;gap:8px;}
   .row-panel.over{border-color:var(--sel);box-shadow:inset 0 0 0 2px rgba(37,99,235,.28);}
+  .row-panel.foul{border-color:var(--danger);box-shadow:inset 0 0 0 1px var(--danger);}
+
+  /* бонусы (роялти) */
+  .roy{color:var(--muted);}
+  .roy b{color:var(--kept);font-weight:700;}
 
   /* зона раздачи */
   .felt{
@@ -166,8 +170,47 @@
 
   input{transition:background-color .2s ease,border-color .2s ease,color .2s ease;}
 
+  /* ---------- Оверлей «фол» ---------- */
+  .foul-overlay{
+    position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(65% 65% at 50% 50%, #1a0002, #000 78%);
+    cursor:pointer;animation:foulFade .45s ease both;
+  }
+  .foul-overlay[hidden]{display:none;}
+  .foul-inner{width:min(94vw,980px);text-align:center;padding:0 4vw;}
+  .foul-text{
+    font-family:var(--card-serif);color:#b01c22;text-transform:uppercase;font-weight:700;
+    font-size:clamp(26px,7.4vw,84px);line-height:1.05;
+    text-shadow:0 0 34px rgba(170,0,0,.5), 0 0 4px rgba(0,0,0,.9);
+    animation:foulText 1.7s cubic-bezier(.16,.72,.16,1) both;
+  }
+  .foul-line{
+    height:1px;margin:clamp(10px,2.2vw,24px) auto;width:100%;
+    background:linear-gradient(90deg,transparent,rgba(176,28,34,.9),transparent);
+    animation:foulLine 1.9s cubic-bezier(.16,.72,.16,1) both;
+  }
+  .foul-reason{
+    margin-top:clamp(14px,3vw,30px);color:rgba(220,180,180,.68);
+    font-family:var(--card-serif);font-size:clamp(12px,1.7vw,16px);letter-spacing:.06em;
+    animation:foulFade 1s ease 1s both;
+  }
+  .foul-hint{
+    margin-top:10px;color:rgba(200,170,170,.42);font-size:11px;letter-spacing:.18em;
+    text-transform:uppercase;animation:foulFade 1s ease 1.5s both;
+  }
+  @keyframes foulFade{from{opacity:0}to{opacity:1}}
+  @keyframes foulText{
+    0%{opacity:0;letter-spacing:.42em;transform:scaleY(.86)}
+    100%{opacity:1;letter-spacing:.1em;transform:none}
+  }
+  @keyframes foulLine{
+    0%{opacity:0;transform:scaleX(.15)}
+    100%{opacity:1;transform:none}
+  }
+
   @media (prefers-reduced-motion: reduce){
     .pc,body,.felt,.btn,.ctl,input,.row-panel{transition:none;}
+    .foul-overlay,.foul-text,.foul-line,.foul-reason,.foul-hint{animation:none;}
   }
 </style>
 </head>
@@ -200,31 +243,43 @@
 
     <!-- 1. Раскладка (3 линии) -->
     <section class="mb-7">
-      <div data-i18n="boardEyebrow" class="eyebrow text-[11px] text-[var(--faint)] mb-2">Раскладка</div>
+      <div class="flex items-center justify-between gap-3 mb-2">
+        <div data-i18n="boardEyebrow" class="eyebrow text-[11px] text-[var(--faint)]">Раскладка</div>
+        <div id="royTotal" class="text-[11px] text-[var(--muted)] text-right"></div>
+      </div>
       <div class="space-y-3">
 
         <div class="row-panel" data-drop="top">
-          <div class="flex items-center justify-between mb-2">
-            <span data-i18n="rowTop" class="eyebrow text-[10px] text-[var(--muted)]">Верх</span>
-            <span id="cntTop" class="text-[11px] text-[var(--faint)] tabular-nums">0/3</span>
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <span data-i18n="rowTop" class="eyebrow text-[10px] text-[var(--muted)] shrink-0">Верх</span>
+            <span class="flex items-center gap-2 min-w-0">
+              <span id="royTop" class="roy text-[11px] truncate"></span>
+              <span id="cntTop" class="text-[11px] text-[var(--faint)] tabular-nums shrink-0">0/3</span>
+            </span>
           </div>
-          <div id="rowTop" class="row-slots"></div>
+          <div id="rowTop" class="row-slots" data-cards></div>
         </div>
 
         <div class="row-panel" data-drop="mid">
-          <div class="flex items-center justify-between mb-2">
-            <span data-i18n="rowMid" class="eyebrow text-[10px] text-[var(--muted)]">Середина</span>
-            <span id="cntMid" class="text-[11px] text-[var(--faint)] tabular-nums">0/5</span>
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <span data-i18n="rowMid" class="eyebrow text-[10px] text-[var(--muted)] shrink-0">Середина</span>
+            <span class="flex items-center gap-2 min-w-0">
+              <span id="royMid" class="roy text-[11px] truncate"></span>
+              <span id="cntMid" class="text-[11px] text-[var(--faint)] tabular-nums shrink-0">0/5</span>
+            </span>
           </div>
-          <div id="rowMid" class="row-slots"></div>
+          <div id="rowMid" class="row-slots" data-cards></div>
         </div>
 
         <div class="row-panel" data-drop="bottom">
-          <div class="flex items-center justify-between mb-2">
-            <span data-i18n="rowBottom" class="eyebrow text-[10px] text-[var(--muted)]">Низ</span>
-            <span id="cntBottom" class="text-[11px] text-[var(--faint)] tabular-nums">0/5</span>
+          <div class="flex items-center justify-between gap-2 mb-2">
+            <span data-i18n="rowBottom" class="eyebrow text-[10px] text-[var(--muted)] shrink-0">Низ</span>
+            <span class="flex items-center gap-2 min-w-0">
+              <span id="royBottom" class="roy text-[11px] truncate"></span>
+              <span id="cntBottom" class="text-[11px] text-[var(--faint)] tabular-nums shrink-0">0/5</span>
+            </span>
           </div>
-          <div id="rowBottom" class="row-slots"></div>
+          <div id="rowBottom" class="row-slots" data-cards></div>
         </div>
 
       </div>
@@ -239,7 +294,7 @@
         <div id="pickHint" class="text-[11px] text-[var(--faint)]"></div>
       </div>
       <div class="felt rounded-2xl p-4" data-drop="current">
-        <div id="dealZone" class="flex flex-wrap gap-2.5 items-start"></div>
+        <div id="dealZone" class="flex flex-wrap gap-2.5 items-start" data-cards></div>
       </div>
       <div class="mt-3 flex items-center gap-3 flex-wrap">
         <button id="confirmBtn" data-i18n="confirm" class="btn bg-blue-600 text-white px-4 py-2.5 text-sm hover:bg-blue-500" disabled>Подтвердить</button>
@@ -261,6 +316,11 @@
         <button id="generateBtn" class="btn bg-[var(--btn-bg)] text-[var(--btn-text)] px-5 py-2.5 text-sm hover:bg-[var(--btn-bg-hover)]">
           Сгенерировать
         </button>
+        <label class="ctl inline-flex items-center gap-2 cursor-pointer select-none text-sm text-[var(--muted)]">
+          <input id="autoSortChk" type="checkbox"
+                 class="h-4 w-4 rounded border-[var(--border-strong)] accent-blue-600 cursor-pointer" />
+          <span data-i18n="autoSort">Автоматически сортировать</span>
+        </label>
         <button id="resetBtn" data-i18n="reset" class="btn ml-auto text-[var(--danger)] px-3 py-2.5 text-sm hover:bg-[var(--danger-hover)]">
           Сбросить всё
         </button>
@@ -284,6 +344,17 @@
 
   </main>
 
+  <!-- Оверлей «фол» -->
+  <div id="foulOverlay" class="foul-overlay" hidden role="alertdialog" aria-modal="true">
+    <div class="foul-inner">
+      <div class="foul-line"></div>
+      <div id="foulText" class="foul-text">ВЫ ОБОСРАЛИСЬ</div>
+      <div class="foul-line"></div>
+      <div id="foulReason" class="foul-reason"></div>
+      <div id="foulHint" class="foul-hint"></div>
+    </div>
+  </div>
+
 <script>
 (() => {
   "use strict";
@@ -295,6 +366,10 @@
   ];
   const RANKS = ["A","2","3","4","5","6","7","8","9","10","J","Q","K"];
   const SUIT_COLOR = { "♠":"blk", "♥":"red", "♦":"dia", "♣":"clb" };
+  const SUIT_ORDER = { "♠":0, "♥":1, "♦":2, "♣":3 };
+  const RANK_VAL = {
+    "2":2,"3":3,"4":4,"5":5,"6":6,"7":7,"8":8,"9":9,"10":10,"J":11,"Q":12,"K":13,"A":14,
+  };
 
   const DECK = [];
   for (const suit of SUITS)
@@ -305,14 +380,17 @@
   const CAP  = { top:3, mid:5, bottom:5 };
 
   // ---------- Состояние ----------
-  // current: [{card, row}]  row = null (в раздаче) | 'top'|'mid'|'bottom' (разложена, но не подтверждена)
-  // board:   {row: [card]}  подтверждённые (зафиксированные) карты
+  // rows:    {row: [{card, pending}]}  порядок карт в линии = порядок отображения
+  //          pending = true — карта текущей раздачи (можно двигать между линиями)
+  //          pending = false — зафиксированная (можно только сортировать внутри своей линии)
+  // deal:    [card]  карты текущей раздачи, ещё не разложенные
   // history: [{gen, cards:[{card, row}]}]  подтверждённые раздачи (новые сверху)
   const state = {
-    board: { top:[], mid:[], bottom:[] },
-    current: [],
+    rows: { top:[], mid:[], bottom:[] },
+    deal: [],
     history: [],
     genCounter: 0,
+    autoSort: false,
   };
 
   // ---------- DOM ----------
@@ -320,14 +398,17 @@
   const el = {
     deckCount: $("deckCount"), dealZone: $("dealZone"), pickHint: $("pickHint"),
     status: $("status"), countInput: $("countInput"), generateBtn: $("generateBtn"),
-    confirmBtn: $("confirmBtn"), cancelBtn: $("cancelBtn"),
+    confirmBtn: $("confirmBtn"), cancelBtn: $("cancelBtn"), autoSortChk: $("autoSortChk"),
     historyZone: $("historyZone"), undoBtn: $("undoBtn"), resetBtn: $("resetBtn"),
     themeBtn: $("themeBtn"), langBtn: $("langBtn"), version: $("version"),
+    royTotal: $("royTotal"),
+    foulOverlay: $("foulOverlay"), foulText: $("foulText"),
+    foulReason: $("foulReason"), foulHint: $("foulHint"),
   };
   const ROW_EL = {
-    top:    { slots:$("rowTop"),    cnt:$("cntTop")    },
-    mid:    { slots:$("rowMid"),    cnt:$("cntMid")    },
-    bottom: { slots:$("rowBottom"), cnt:$("cntBottom") },
+    top:    { slots:$("rowTop"),    cnt:$("cntTop"),    roy:$("royTop"),    panel:document.querySelector('.row-panel[data-drop="top"]')    },
+    mid:    { slots:$("rowMid"),    cnt:$("cntMid"),    roy:$("royMid"),    panel:document.querySelector('.row-panel[data-drop="mid"]')    },
+    bottom: { slots:$("rowBottom"), cnt:$("cntBottom"), roy:$("royBottom"), panel:document.querySelector('.row-panel[data-drop="bottom"]') },
   };
 
   // ---------- Локализация ----------
@@ -349,6 +430,7 @@
       undo:"Отменить последнее действие",
       historyEyebrow:"История раздач",
       countAria:"Количество карт",
+      autoSort:"Автоматически сортировать",
       phDeal:"Нажмите «Сгенерировать», чтобы раздать карты",
       phAllPlaced:"Все карты разложены — подтвердите или отмените",
       phHistory:"Здесь будет каждая подтверждённая раздача.",
@@ -363,6 +445,15 @@
       langTo:"Switch to English",
       themeToDark:"Тёмная тема",
       themeToLight:"Светлая тема",
+      royTotal:(n)=>`бонусы: +${n}`,
+      royNone:"бонусов нет",
+      foulShort:"фол — бонусы не считаются",
+      foulTitle:"ВЫ ОБОСРАЛИСЬ",
+      foulHint:"нажмите, чтобы закрыть",
+      foulReason:(a,b)=>`${a} сильнее, чем ${b}`,
+      rowNameTop:"верх", rowNameMid:"середина", rowNameBottom:"низ",
+      hands:["старшая карта","пара","две пары","сет","стрит","флеш","фулл-хаус","каре","стрит-флеш"],
+      royalFlush:"роял-флеш",
     },
     en: {
       title:"Card Generator",
@@ -381,6 +472,7 @@
       undo:"Undo last action",
       historyEyebrow:"Deal history",
       countAria:"Number of cards",
+      autoSort:"Sort automatically",
       phDeal:"Press “Generate” to deal some cards",
       phAllPlaced:"All cards placed — confirm or cancel",
       phHistory:"Every confirmed deal will show up here.",
@@ -395,6 +487,15 @@
       langTo:"Переключить на русский",
       themeToDark:"Dark theme",
       themeToLight:"Light theme",
+      royTotal:(n)=>`royalties: +${n}`,
+      royNone:"no royalties",
+      foulShort:"foul — royalties don’t count",
+      foulTitle:"YOU SHAT YOURSELF",
+      foulHint:"click to dismiss",
+      foulReason:(a,b)=>`${a} is stronger than ${b}`,
+      rowNameTop:"top", rowNameMid:"middle", rowNameBottom:"bottom",
+      hands:["high card","pair","two pair","trips","straight","flush","full house","quads","straight flush"],
+      royalFlush:"royal flush",
     },
   };
 
@@ -403,7 +504,8 @@
 
   const THEME_KEY = "cardGenerator.theme";
   const LANG_KEY  = "cardGenerator.lang";
-  const STORE_KEY = "cardGenerator.state.v3";
+  const STORE_KEY = "cardGenerator.state.v4";
+  const OLD_KEY   = "cardGenerator.state.v3";
   const mql = window.matchMedia("(prefers-color-scheme: dark)");
 
   function safeGet(k){ try { return localStorage.getItem(k); } catch (_) { return null; } }
@@ -417,16 +519,19 @@
   // ---------- Хелперы ----------
   function usedIds(){
     const s = new Set();
-    state.current.forEach(c => s.add(c.card.id));
-    for (const r of ROWS) state.board[r].forEach(c => s.add(c.id));
+    for (const r of ROWS) state.rows[r].forEach(e => s.add(e.card.id));
+    state.deal.forEach(c => s.add(c.id));
     for (const e of state.history) e.cards.forEach(c => s.add(c.card.id));
     return s;
   }
   function available(){ const u = usedIds(); return DECK.filter(c => !u.has(c.id)); }
 
-  function rowCount(r){ return state.board[r].length + state.current.filter(c => c.row === r).length; }
+  function rowCount(r){ return state.rows[r].length; }
   function rowFree(r){ return CAP[r] - rowCount(r); }
-  const isPending = () => state.current.length > 0;
+  function cardsOf(r){ return state.rows[r].map(e => e.card); }
+  function isPending(){
+    return state.deal.length > 0 || ROWS.some(r => state.rows[r].some(e => e.pending));
+  }
 
   function shuffle(arr){
     const a = arr.slice();
@@ -435,6 +540,13 @@
       [a[i], a[j]] = [a[j], a[i]];
     }
     return a;
+  }
+
+  // сортировка: сперва масть, затем ранг от 2 к тузу
+  function sortCards(arr){
+    arr.sort((a,b) =>
+      (SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit]) || (RANK_VAL[a.rank] - RANK_VAL[b.rank]));
+    return arr;
   }
 
   function cardHTML(card, { size="lg", cls="", extra="" } = {}){
@@ -459,32 +571,140 @@
     return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
   }
 
+  // ---------- Оценка комбинаций (китайский покер) ----------
+  // cat: 0 старшая, 1 пара, 2 две пары, 3 сет, 4 стрит, 5 флеш, 6 фулл-хаус, 7 каре, 8 стрит-флеш
+  // Стрит и флеш возможны только на 5 картах — неполные линии оцениваются по кратностям рангов.
+  function evaluate(cards){
+    const n = cards.length;
+    if (!n) return null;
+
+    const vals = cards.map(c => RANK_VAL[c.rank]).sort((a,b) => b - a);
+    const counts = new Map();
+    for (const v of vals) counts.set(v, (counts.get(v) || 0) + 1);
+    // группы: сперва по кратности, затем по старшинству
+    const groups = [...counts.entries()].sort((a,b) => (b[1] - a[1]) || (b[0] - a[0]));
+    const byCount = groups.map(g => g[0]);
+
+    const isFlush = n === 5 && cards.every(c => c.suit === cards[0].suit);
+    let straightHigh = 0;
+    if (n === 5 && counts.size === 5){
+      const s = [...counts.keys()].sort((a,b) => a - b);
+      if (s[4] - s[0] === 4) straightHigh = s[4];
+      else if (s[0] === 2 && s[1] === 3 && s[2] === 4 && s[3] === 5 && s[4] === 14) straightHigh = 5; // A-2-3-4-5
+    }
+
+    const mk = (cat, tie) => ({ cat, tie, size:n });
+
+    if (isFlush && straightHigh) return mk(8, [straightHigh]);
+    if (groups[0][1] === 4) return mk(7, byCount);
+    if (groups[0][1] === 3 && groups[1] && groups[1][1] >= 2) return mk(6, byCount);
+    if (isFlush) return mk(5, vals);
+    if (straightHigh) return mk(4, [straightHigh]);
+    if (groups[0][1] === 3) return mk(3, byCount);
+    if (groups[0][1] === 2 && groups[1] && groups[1][1] === 2) return mk(2, byCount);
+    if (groups[0][1] === 2) return mk(1, byCount);
+    return mk(0, vals);
+  }
+
+  // 1 — a сильнее, -1 — b сильнее, 0 — равны / нечего сравнивать
+  function compareHands(a, b){
+    if (!a || !b) return 0;
+    if (a.cat !== b.cat) return a.cat > b.cat ? 1 : -1;
+    const len = Math.min(a.tie.length, b.tie.length);
+    for (let i = 0; i < len; i++)
+      if (a.tie[i] !== b.tie[i]) return a.tie[i] > b.tie[i] ? 1 : -1;
+    return 0;
+  }
+
+  const isRoyalFlush = (h) => !!h && h.cat === 8 && h.tie[0] === 14;
+
+  function handName(h){
+    if (!h) return "";
+    return isRoyalFlush(h) ? T().royalFlush : T().hands[h.cat];
+  }
+
+  // бонусы (роялти) как в китайском покере
+  const MID_ROY = { 3:2, 4:4, 5:8, 6:12, 7:20, 8:30 };
+  const BOT_ROY = { 4:2, 5:4, 6:6, 7:10, 8:15 };
+  function royalty(row, h){
+    if (!h) return 0;
+    if (row === "top"){
+      if (h.cat === 3) return 10 + (h.tie[0] - 2);            // 222 = 10 … AAA = 22
+      if (h.cat === 1) return h.tie[0] >= 6 ? h.tie[0] - 5 : 0; // 66 = 1 … AA = 9
+      return 0;
+    }
+    if (row === "mid") return isRoyalFlush(h) ? 50 : (MID_ROY[h.cat] || 0);
+    return isRoyalFlush(h) ? 25 : (BOT_ROY[h.cat] || 0);
+  }
+
+  // проверка «завала» — низ ≥ середина ≥ верх (и низ ≥ верх)
+  function foulInfo(){
+    const h = { top:evaluate(cardsOf("top")), mid:evaluate(cardsOf("mid")), bottom:evaluate(cardsOf("bottom")) };
+    const bad = new Set();
+    const pairs = [];
+    const check = (a, b) => {
+      if (compareHands(h[a], h[b]) > 0){ bad.add(a); bad.add(b); pairs.push([a, b]); }
+    };
+    check("top", "mid");
+    check("top", "bottom");
+    check("mid", "bottom");
+    return { foul: pairs.length > 0, bad, pairs, hands:h };
+  }
+
+  function rowLabel(r){
+    return r === "top" ? T().rowNameTop : r === "mid" ? T().rowNameMid : T().rowNameBottom;
+  }
+
   // ---------- Рендер ----------
   function renderRow(row){
-    const committed = state.board[row].map(c =>
-      cardHTML(c, { size:"md", cls:"locked" }));                    // зафиксированные, не таскаются
-    const pending = state.current.filter(c => c.row === row).map(c =>
-      cardHTML(c.card, { size:"md", cls:"drag pending", extra:`draggable="true" data-id="${c.card.id}"` }));
-    const cards = committed.concat(pending);
-    let html = cards.join("");
-    const total = rowCount(row);
-    for (let i = total; i < CAP[row]; i++) html += '<div class="slot"></div>';
+    const entries = state.rows[row];
+    let html = entries.map(e => cardHTML(e.card, {
+      size: "md",
+      cls: "drag " + (e.pending ? "pending" : "locked"),
+      extra: `draggable="true" data-id="${e.card.id}"`,
+    })).join("");
+    for (let i = entries.length; i < CAP[row]; i++) html += '<div class="slot"></div>';
     ROW_EL[row].slots.innerHTML = html;
-    ROW_EL[row].cnt.textContent = `${total}/${CAP[row]}`;
+    ROW_EL[row].cnt.textContent = `${entries.length}/${CAP[row]}`;
   }
-  function renderBoard(){ ROWS.forEach(renderRow); }
+
+  function renderRoyalties(){
+    const info = foulInfo();
+    const showFoulState = info.foul && state.genCounter >= 3;   // как и оверлей — только с 3-й раздачи
+    let total = 0;
+    for (const r of ROWS){
+      const h = info.hands[r];
+      const pts = royalty(r, h);
+      total += pts;
+      const full = rowCount(r) === CAP[r];
+      let html = "";
+      if (h && (full || h.cat > 0)){
+        html = `<span class="${full ? "" : "opacity-60"}">${handName(h)}${pts ? ` <b>+${pts}</b>` : ""}</span>`;
+      }
+      ROW_EL[r].roy.innerHTML = html;
+      ROW_EL[r].panel.classList.toggle("foul", showFoulState && info.bad.has(r));
+    }
+    if (showFoulState){
+      el.royTotal.textContent = T().foulShort;
+      el.royTotal.style.color = "var(--danger)";
+    } else {
+      el.royTotal.textContent = total ? T().royTotal(total) : "";
+      el.royTotal.style.color = "";
+    }
+  }
+
+  function renderBoard(){ ROWS.forEach(renderRow); renderRoyalties(); }
 
   function renderDeal(){
-    const inDeal = state.current.filter(c => c.row === null);
-    if (state.current.length === 0){
+    if (!isPending()){
       el.dealZone.innerHTML = placeholder(T().phDeal, true);
       el.pickHint.textContent = "";
-    } else if (inDeal.length === 0){
+    } else if (state.deal.length === 0){
       el.dealZone.innerHTML = placeholder(T().phAllPlaced, true);
       el.pickHint.textContent = T().dealHint;
     } else {
-      el.dealZone.innerHTML = inDeal.map(c =>
-        cardHTML(c.card, { size:"lg", cls:"drag", extra:`draggable="true" data-id="${c.card.id}"` })
+      el.dealZone.innerHTML = state.deal.map(card =>
+        cardHTML(card, { size:"lg", cls:"drag", extra:`draggable="true" data-id="${card.id}"` })
       ).join("");
       el.pickHint.textContent = T().dealHint;
     }
@@ -521,6 +741,7 @@
     el.confirmBtn.disabled = !pending;
     el.cancelBtn.disabled = !pending;
     el.undoBtn.disabled = pending || state.history.length === 0;
+    el.autoSortChk.checked = state.autoSort;
   }
 
   function renderAll(){ renderBoard(); renderDeal(); renderHistory(); renderControls(); }
@@ -529,39 +750,118 @@
   function persist(){
     try {
       localStorage.setItem(STORE_KEY, JSON.stringify({
-        board: state.board,
-        current: state.current,
+        rows: state.rows,
+        deal: state.deal,
         history: state.history,
         genCounter: state.genCounter,
+        autoSort: state.autoSort,
         count: el.countInput.value,
       }));
     } catch (_) {}
   }
+
   function restore(){
+    const raw = safeGet(STORE_KEY);
+    if (raw){
+      try {
+        const d = JSON.parse(raw);
+        if (d.rows && typeof d.rows === "object")
+          for (const r of ROWS)
+            state.rows[r] = (Array.isArray(d.rows[r]) ? d.rows[r] : [])
+              .filter(e => e && e.card)
+              .map(e => ({ card:e.card, pending: !!e.pending }))
+              .slice(0, CAP[r]);
+        state.deal = Array.isArray(d.deal) ? d.deal.filter(Boolean) : [];
+        state.history = Array.isArray(d.history) ? d.history : [];
+        state.genCounter = Number(d.genCounter) || 0;
+        state.autoSort = !!d.autoSort;
+        if (d.count) el.countInput.value = d.count;
+      } catch (_) {}
+      return;
+    }
+    // миграция со старого формата (v3)
     try {
-      const raw = localStorage.getItem(STORE_KEY);
-      if (!raw) return;
-      const d = JSON.parse(raw);
+      const old = safeGet(OLD_KEY);
+      if (!old) return;
+      const d = JSON.parse(old);
       if (d.board && typeof d.board === "object")
         for (const r of ROWS)
-          state.board[r] = (Array.isArray(d.board[r]) ? d.board[r] : []).slice(0, CAP[r]);
-      state.current = Array.isArray(d.current)
-        ? d.current.map(c => ({ card: c.card, row: (c.row == null ? null : c.row) })) : [];
+          state.rows[r] = (Array.isArray(d.board[r]) ? d.board[r] : [])
+            .slice(0, CAP[r]).map(card => ({ card, pending:false }));
+      if (Array.isArray(d.current))
+        for (const c of d.current){
+          if (!c || !c.card) continue;
+          if (c.row && ROWS.includes(c.row) && rowFree(c.row) > 0)
+            state.rows[c.row].push({ card:c.card, pending:true });
+          else state.deal.push(c.card);
+        }
       state.history = Array.isArray(d.history) ? d.history : [];
       state.genCounter = Number(d.genCounter) || 0;
       if (d.count) el.countInput.value = d.count;
     } catch (_) {}
   }
-  function commit(){ renderAll(); persist(); }
 
-  // ---------- Перемещение (только карты текущей генерации) ----------
-  function moveCard(id, to){
-    const item = state.current.find(c => c.card.id === id);
-    if (!item || item.row === to) return false;
-    if (to !== null && rowFree(to) <= 0) return false;   // линия заполнена
-    item.row = to;
+  function commit(){
+    if (state.autoSort) sortCards(state.deal);
+    renderAll();
+    persist();
+  }
+
+  // ---------- Перемещение и сортировка ----------
+  // zone: 'deal' | 'top' | 'mid' | 'bottom'
+  function locate(id){
+    const di = state.deal.findIndex(c => c.id === id);
+    if (di >= 0) return { zone:"deal", index:di };
+    for (const r of ROWS){
+      const i = state.rows[r].findIndex(e => e.card.id === id);
+      if (i >= 0) return { zone:r, index:i };
+    }
+    return null;
+  }
+
+  function isDraggableToOtherRow(id){
+    const loc = locate(id);
+    if (!loc) return false;
+    return loc.zone === "deal" || state.rows[loc.zone][loc.index].pending;
+  }
+
+  // to: null — зона раздачи, иначе имя линии. index === null → в конец.
+  function moveCard(id, to, index = null){
+    const loc = locate(id);
+    if (!loc) return false;
+
+    const fromDeal = loc.zone === "deal";
+    const entry = fromDeal ? null : state.rows[loc.zone][loc.index];
+    const card  = fromDeal ? state.deal[loc.index] : entry.card;
+    const toZone = (to === null) ? "deal" : to;
+
+    // зафиксированные карты не покидают свою линию — только сортировка внутри
+    if (entry && !entry.pending && toZone !== loc.zone) return false;
+
+    if (toZone === loc.zone){                      // сортировка внутри зоны
+      if (index === null) return false;
+      const arr = fromDeal ? state.deal : state.rows[loc.zone];
+      const item = arr.splice(loc.index, 1)[0];
+      arr.splice(Math.max(0, Math.min(index, arr.length)), 0, item);
+      return true;
+    }
+
+    if (toZone !== "deal" && rowFree(toZone) <= 0) return false;   // линия заполнена
+
+    if (fromDeal) state.deal.splice(loc.index, 1);
+    else state.rows[loc.zone].splice(loc.index, 1);
+
+    if (toZone === "deal"){
+      const at = (index === null) ? state.deal.length : Math.max(0, Math.min(index, state.deal.length));
+      state.deal.splice(at, 0, card);
+    } else {
+      const arr = state.rows[toZone];
+      const at = (index === null) ? arr.length : Math.max(0, Math.min(index, arr.length));
+      arr.splice(at, 0, { card, pending:true });
+    }
     return true;
   }
+
   function placeFirstFree(id){
     for (const r of ROWS){
       if (rowFree(r) > 0){ if (moveCard(id, r)){ setStatus(""); commit(); } return; }
@@ -579,7 +879,7 @@
     if (pool.length === 0){ setStatus(T().stEmpty); return; }
 
     const drawn = pool.slice(0, Math.min(n, pool.length));
-    state.current = drawn.map(card => ({ card, row: null }));
+    state.deal = state.autoSort ? sortCards(drawn) : drawn;
     setStatus(drawn.length < n ? T().stCapped(n, drawn.length) : "");
     commit();
   }
@@ -587,21 +887,29 @@
   function confirmDeal(){
     if (!isPending()) return;
     state.genCounter += 1;
-    state.history.unshift({
-      gen: state.genCounter,
-      cards: state.current.map(c => ({ card: c.card, row: c.row })),
-    });
-    // взятые карты фиксируем на линиях, невзятые «сгорают» (остаются только в истории)
+
+    const cards = [];
     for (const r of ROWS)
-      for (const c of state.current.filter(c => c.row === r)) state.board[r].push(c.card);
-    state.current = [];
+      for (const e of state.rows[r]) if (e.pending) cards.push({ card:e.card, row:r });
+    for (const card of state.deal) cards.push({ card, row:null });   // невзятые «сгорают»
+
+    state.history.unshift({ gen: state.genCounter, cards });
+    for (const r of ROWS) state.rows[r].forEach(e => { e.pending = false; });
+    state.deal = [];
     setStatus("");
     commit();
+
+    if (state.genCounter >= 3){
+      const info = foulInfo();
+      if (info.foul) showFoul(info);
+    }
   }
 
   function cancelDeal(){
     if (!isPending()) return;
-    state.current = [];        // карты возвращаются в колоду
+    // все карты текущей раздачи возвращаются в колоду
+    for (const r of ROWS) state.rows[r] = state.rows[r].filter(e => !e.pending);
+    state.deal = [];
     setStatus("");
     commit();
   }
@@ -610,28 +918,49 @@
     if (isPending() || state.history.length === 0) return;
     const entry = state.history.shift();
     state.genCounter = Math.max(0, state.genCounter - 1);
-    // снимаем зафиксированные карты этой раздачи с линий
+    // карты той раздачи снова становятся незафиксированными (на своих местах)
     for (const c of entry.cards){
-      if (c.row){
-        const arr = state.board[c.row];
-        const i = arr.findIndex(x => x.id === c.card.id);
-        if (i >= 0) arr.splice(i, 1);
+      if (c.row && state.rows[c.row]){
+        const i = state.rows[c.row].findIndex(e => e.card.id === c.card.id);
+        if (i >= 0) state.rows[c.row][i].pending = true;
+        else if (rowFree(c.row) > 0) state.rows[c.row].push({ card:c.card, pending:true });
+        else state.deal.push(c.card);
+      } else {
+        state.deal.push(c.card);
       }
     }
-    // возвращаем всю раздачу в текущую генерацию (с прежней раскладкой) для переигровки
-    state.current = entry.cards.map(c => ({ card: c.card, row: c.row }));
     setStatus("");
     commit();
   }
 
   function reset(){
-    state.board = { top:[], mid:[], bottom:[] };
-    state.current = [];
+    state.rows = { top:[], mid:[], bottom:[] };
+    state.deal = [];
     state.history = [];
     state.genCounter = 0;
+    hideFoul();
     setStatus("");
     commit();
   }
+
+  // ---------- Оверлей «фол» ----------
+  function showFoul(info){
+    el.foulText.textContent = T().foulTitle;
+    el.foulHint.textContent = T().foulHint;
+    const [a, b] = info.pairs[0];
+    el.foulReason.textContent = T().foulReason(
+      `${rowLabel(a)} (${handName(info.hands[a])})`,
+      `${rowLabel(b)} (${handName(info.hands[b])})`,
+    );
+    el.foulOverlay.hidden = false;
+    // перезапуск анимаций
+    el.foulOverlay.querySelectorAll(".foul-text,.foul-line,.foul-reason,.foul-hint").forEach(n => {
+      n.style.animation = "none";
+      void n.offsetWidth;
+      n.style.animation = "";
+    });
+  }
+  function hideFoul(){ el.foulOverlay.hidden = true; }
 
   // ---------- Тема ----------
   function effectiveTheme(){
@@ -675,7 +1004,7 @@
   // ---------- Drag & drop ----------
   let draggingId = null;
   let pendingMove = null;
-  
+
   document.addEventListener("dragstart", (e) => {
     const card = e.target.closest && e.target.closest('.pc[draggable="true"]');
     if (!card) return;
@@ -687,14 +1016,28 @@
     draggingId = null;
     document.querySelectorAll(".dragging").forEach(x => x.classList.remove("dragging"));
     document.querySelectorAll(".over").forEach(x => x.classList.remove("over"));
-    if (pendingMove) {
+    if (pendingMove){
       pendingMove();
       pendingMove = null;
     }
   });
+
+  // индекс вставки по позиции курсора (без учёта самой перетаскиваемой карты)
+  function dropIndex(container, x, y, skipId){
+    if (!container) return null;
+    const cards = [...container.querySelectorAll(".pc[data-id]")].filter(c => c.dataset.id !== skipId);
+    for (let i = 0; i < cards.length; i++){
+      const r = cards[i].getBoundingClientRect();
+      if (y < r.bottom && x < r.left + r.width / 2) return i;
+    }
+    return cards.length;
+  }
+
   function wireDrop(zoneEl){
     const zoneAttr = zoneEl.dataset.drop;              // 'top'|'mid'|'bottom'|'current'
     const to = (zoneAttr === "current") ? null : zoneAttr;
+    const container = zoneEl.querySelector("[data-cards]");
+
     zoneEl.addEventListener("dragover", (e) => {
       e.preventDefault();
       try { e.dataTransfer.dropEffect = "move"; } catch (_) {}
@@ -710,11 +1053,13 @@
       const id = draggingId || e.dataTransfer?.getData("text/plain");
       if (!id) return;
 
+      const index = dropIndex(container, e.clientX, e.clientY, id);
+
       pendingMove = () => {
-        if (moveCard(id, to)) {
+        if (moveCard(id, to, index)){
           setStatus("");
           commit();
-        } else if (to !== null) {
+        } else if (to !== null && rowFree(to) <= 0 && isDraggableToOtherRow(id)){
           setStatus(T().stRowFull);
         }
       };
@@ -730,8 +1075,11 @@
   });
   document.querySelectorAll(".row-panel").forEach(panel => {
     panel.addEventListener("click", (e) => {
-      const card = e.target.closest('.pc[data-id]');   // только незафиксированные карты имеют data-id
-      if (card && moveCard(card.dataset.id, null)){ setStatus(""); commit(); }
+      const card = e.target.closest('.pc[data-id]');
+      if (!card) return;
+      const id = card.dataset.id;
+      if (!isDraggableToOtherRow(id)) return;          // зафиксированные карты кликом не снимаются
+      if (moveCard(id, null)){ setStatus(""); commit(); }
     });
   });
 
@@ -743,6 +1091,14 @@
   el.resetBtn.addEventListener("click", reset);
   el.themeBtn.addEventListener("click", toggleTheme);
   el.langBtn.addEventListener("click", toggleLang);
+  el.autoSortChk.addEventListener("change", () => {
+    state.autoSort = el.autoSortChk.checked;
+    commit();
+  });
+  el.foulOverlay.addEventListener("click", hideFoul);
+  document.addEventListener("keydown", (e) => {
+    if (!el.foulOverlay.hidden && (e.key === "Escape" || e.key === "Enter" || e.key === " ")) hideFoul();
+  });
 
   // ---------- Старт ----------
   restore();
