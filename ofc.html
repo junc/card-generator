@@ -316,11 +316,14 @@
         <button id="generateBtn" class="btn bg-[var(--btn-bg)] text-[var(--btn-text)] px-5 py-2.5 text-sm hover:bg-[var(--btn-bg-hover)]">
           Сгенерировать
         </button>
-        <label class="ctl inline-flex items-center gap-2 cursor-pointer select-none text-sm text-[var(--muted)]">
-          <input id="autoSortChk" type="checkbox"
-                 class="h-4 w-4 rounded border-[var(--border-strong)] accent-blue-600 cursor-pointer" />
-          <span data-i18n="autoSort">Автоматически сортировать</span>
-        </label>
+        <div class="flex items-center gap-1.5">
+          <button id="sortRankBtn" data-i18n="sortRank"
+                  class="ctl rounded-lg border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text)] px-2.5 py-2 text-xs font-semibold hover:bg-[var(--surface-hover)]"
+                  title="2 → A">По достоинству</button>
+          <button id="sortSuitBtn" data-i18n="sortSuit"
+                  class="ctl rounded-lg border border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text)] px-2.5 py-2 text-xs font-semibold hover:bg-[var(--surface-hover)]"
+                  title="♠ ♥ ♦ ♣">По масти</button>
+        </div>
         <button id="resetBtn" data-i18n="reset" class="btn ml-auto text-[var(--danger)] px-3 py-2.5 text-sm hover:bg-[var(--danger-hover)]">
           Сбросить всё
         </button>
@@ -339,7 +342,7 @@
     </section>
 
     <footer class="mt-8 text-center text-[11px] text-[var(--faint)]">
-      <span data-i18n="versionLabel">версия</span> <span id="version" class="tabular-nums"></span>
+      <span data-i18n="versionLabel">версия</span> <span id="version" class="tabular-nums">2026-08-12</span>
     </footer>
 
   </main>
@@ -390,7 +393,6 @@
     deal: [],
     history: [],
     genCounter: 0,
-    autoSort: false,
   };
 
   // ---------- DOM ----------
@@ -398,7 +400,8 @@
   const el = {
     deckCount: $("deckCount"), dealZone: $("dealZone"), pickHint: $("pickHint"),
     status: $("status"), countInput: $("countInput"), generateBtn: $("generateBtn"),
-    confirmBtn: $("confirmBtn"), cancelBtn: $("cancelBtn"), autoSortChk: $("autoSortChk"),
+    confirmBtn: $("confirmBtn"), cancelBtn: $("cancelBtn"),
+    sortRankBtn: $("sortRankBtn"), sortSuitBtn: $("sortSuitBtn"),
     historyZone: $("historyZone"), undoBtn: $("undoBtn"), resetBtn: $("resetBtn"),
     themeBtn: $("themeBtn"), langBtn: $("langBtn"), version: $("version"),
     royTotal: $("royTotal"),
@@ -430,7 +433,8 @@
       undo:"Отменить последнее действие",
       historyEyebrow:"История раздач",
       countAria:"Количество карт",
-      autoSort:"Автоматически сортировать",
+      sortRank:"По достоинству",
+      sortSuit:"По масти",
       phDeal:"Нажмите «Сгенерировать», чтобы раздать карты",
       phAllPlaced:"Все карты разложены — подтвердите или отмените",
       phHistory:"Здесь будет каждая подтверждённая раздача.",
@@ -472,7 +476,8 @@
       undo:"Undo last action",
       historyEyebrow:"Deal history",
       countAria:"Number of cards",
-      autoSort:"Sort automatically",
+      sortRank:"By rank",
+      sortSuit:"By suit",
       phDeal:"Press “Generate” to deal some cards",
       phAllPlaced:"All cards placed — confirm or cancel",
       phHistory:"Every confirmed deal will show up here.",
@@ -542,11 +547,20 @@
     return a;
   }
 
-  // сортировка: сперва масть, затем ранг от 2 к тузу
-  function sortCards(arr){
+  function sortByRank(arr){
+    arr.sort((a,b) =>
+      (RANK_VAL[a.rank] - RANK_VAL[b.rank]) || (SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit]));
+    return arr;
+  }
+
+  function sortBySuit(arr){
     arr.sort((a,b) =>
       (SUIT_ORDER[a.suit] - SUIT_ORDER[b.suit]) || (RANK_VAL[a.rank] - RANK_VAL[b.rank]));
     return arr;
+  }
+
+  function sortCards(arr, mode){
+    return mode === "suit" ? sortBySuit(arr) : sortByRank(arr);
   }
 
   function cardHTML(card, { size="lg", cls="", extra="" } = {}){
@@ -565,11 +579,6 @@
   }
 
   function setStatus(msg){ el.status.textContent = msg || ""; }
-
-  function fmtVersion(){
-    const d = new Date(), p = (n) => String(n).padStart(2,"0");
-    return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
-  }
 
   // ---------- Оценка комбинаций (китайский покер) ----------
   // cat: 0 старшая, 1 пара, 2 две пары, 3 сет, 4 стрит, 5 флеш, 6 фулл-хаус, 7 каре, 8 стрит-флеш
@@ -741,7 +750,6 @@
     el.confirmBtn.disabled = !pending;
     el.cancelBtn.disabled = !pending;
     el.undoBtn.disabled = pending || state.history.length === 0;
-    el.autoSortChk.checked = state.autoSort;
   }
 
   function renderAll(){ renderBoard(); renderDeal(); renderHistory(); renderControls(); }
@@ -774,7 +782,6 @@
         state.deal = Array.isArray(d.deal) ? d.deal.filter(Boolean) : [];
         state.history = Array.isArray(d.history) ? d.history : [];
         state.genCounter = Number(d.genCounter) || 0;
-        state.autoSort = !!d.autoSort;
         if (d.count) el.countInput.value = d.count;
       } catch (_) {}
       return;
@@ -870,6 +877,13 @@
   }
 
   // ---------- Действия ----------
+  function applySort(mode){
+    // Разовая сортировка только текущей сгенерированной раздачи.
+    sortCards(state.deal, mode);
+    setStatus("");
+    commit();
+  }
+
   function generate(){
     if (isPending()) return;                       // сначала подтвердите/отмените текущую раздачу
     let n = parseInt(el.countInput.value, 10);
@@ -879,7 +893,7 @@
     if (pool.length === 0){ setStatus(T().stEmpty); return; }
 
     const drawn = pool.slice(0, Math.min(n, pool.length));
-    state.deal = state.autoSort ? sortCards(drawn) : drawn;
+    state.deal = drawn;
     setStatus(drawn.length < n ? T().stCapped(n, drawn.length) : "");
     commit();
   }
@@ -1091,10 +1105,8 @@
   el.resetBtn.addEventListener("click", reset);
   el.themeBtn.addEventListener("click", toggleTheme);
   el.langBtn.addEventListener("click", toggleLang);
-  el.autoSortChk.addEventListener("change", () => {
-    state.autoSort = el.autoSortChk.checked;
-    commit();
-  });
+  el.sortRankBtn.addEventListener("click", () => applySort("rank"));
+  el.sortSuitBtn.addEventListener("click", () => applySort("suit"));
   el.foulOverlay.addEventListener("click", hideFoul);
   document.addEventListener("keydown", (e) => {
     if (!el.foulOverlay.hidden && (e.key === "Escape" || e.key === "Enter" || e.key === " ")) hideFoul();
@@ -1102,7 +1114,6 @@
 
   // ---------- Старт ----------
   restore();
-  el.version.textContent = fmtVersion();
   applyLang();
 })();
 </script>
